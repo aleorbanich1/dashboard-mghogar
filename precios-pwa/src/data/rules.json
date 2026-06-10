@@ -1,0 +1,16 @@
+[
+  { "id": "r01", "label": "Lista 12 cuotas sin interés", "base": "lista",    "factor": 1.0,  "cuotas": 12 },
+  { "id": "r02", "label": "Lista 9 cuotas",               "base": "lista",    "factor": 0.95, "cuotas": 9 },
+  { "id": "r03", "label": "Lista 6 cuotas",               "base": "lista",    "factor": 0.9,  "cuotas": 6 },
+  { "id": "r04", "label": "Lista 3 cuotas",               "base": "lista",    "factor": 0.9,  "cuotas": 3 },
+  { "id": "r05", "label": "Contado tarjeta crédito 1 pago","base": "contado", "factor": 1.0  },
+  { "id": "r06", "label": "Lista · Descuento de haberes",   "base": "lista",    "factor": 1.0, "haberes": true },
+  { "id": "r07", "label": "Lista transferencia 60+ días",  "base": "lista",    "factor": 1.0  },
+  { "id": "r08", "label": "Lista cheque 60 días",          "base": "lista",    "factor": 1.0  },
+  { "id": "r09", "label": "Lista cheque 90 días",          "base": "lista",    "factor": 1.0  },
+  { "id": "r10", "label": "Contado efectivo con factura",  "base": "contado", "factor": 0.95 },
+  { "id": "r11", "label": "Contado efectivo sin factura",  "base": "contado", "factor": 0.9  },
+  { "id": "r12", "label": "Contado transferencia 7 días",  "base": "contado", "factor": 1.0  },
+  { "id": "r13", "label": "Contado tarjeta débito",        "base": "contado", "factor": 1.0  },
+  { "id": "r14", "label": "Contado cheque 30 días",        "base": "contado", "factor": 1.0  }
+]

@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+/* Modo oscuro por clase (.dark en <html>), no por prefers-color-scheme,
+   para permitir override manual del usuario. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+html {
+  color-scheme: light;
+  background-color: #f8fafc; /* slate-50, evita flash blanco */
+}
+
+html.dark {
+  color-scheme: dark;
+  background-color: #0b1120; /* slate-950-ish */
+}

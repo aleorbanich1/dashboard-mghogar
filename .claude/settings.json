@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp /tmp/gen-icons.mjs ./gen-icons.mjs)",
+      "Bash(node ./gen-icons.mjs)",
+      "Bash(node -e \"const s=require\\('sharp'\\);for\\(const f of ['pwa-192x192.png','pwa-512x512.png','pwa-maskable-512x512.png','apple-touch-icon.png']\\){s\\('public/'+f\\).metadata\\(\\).then\\(m=>console.log\\(f,m.width+'x'+m.height,m.channels+'ch'\\)\\)}\")",
+      "Bash(timeout 180 yarn build)",
+      "Bash(npm run *)",
+      "Bash(npm test *)",
+      "Bash(npm install *)",
+      "Bash(yarn --version)",
+      "Bash(rm -f package-lock.json)",
+      "Bash(yarn install *)",
+      "PowerShell(Get-Process node -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 5173,4173,3000 } | Select-Object LocalPort, OwningProcess; \"---retry yarn---\"; Set-Location \"c:/Alejandro/precios-pwa\"; yarn install 2>&1 | Select-Object -Last 8)",
+      "Bash(yarn build *)",
+      "Bash(yarn test *)"
+    ]
+  }
+}
