@@ -1,6 +1,7 @@
 [build]
-  command   = "yarn build"
-  publish   = "dist"
+  base    = "precios-pwa"
+  command = "yarn build"
+  publish = "dist"
 
 [[redirects]]
   from   = "/*"
