@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.netlify.panelmghogar",
+      "sha256_cert_fingerprints": [
+        "3B:E2:CC:1A:0A:B0:11:C1:16:93:DD:55:F8:5F:22:82:E6:CF:5E:0D:D6:50:08:8F:B0:BB:01:5C:C1:EC:17:FE"
+      ]
+    }
+  }
+]
