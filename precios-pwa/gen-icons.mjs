@@ -1,38 +1,32 @@
 import sharp from 'sharp'
-import { writeFileSync } from 'node:fs'
 
-const ACCENT = '#059669'   // emerald-600 = acento UI
-const DARK   = '#047857'   // emerald-700 para profundidad sutil
+// Fuente: logo real de la marca (.mg hogar). Alpha transparente en esquinas
+// → se compone sobre fondo blanco para iconos cuadrados nitidos.
+const SRC = 'public/logo-mghogar.png'
+const BG = { r: 0, g: 0, b: 0, alpha: 0 } // transparente
 
-// Logo "MG": fondo acento + texto blanco centrado. r = radio esquinas.
-const svg = ({ size, pad = 0, radius, bg = ACCENT }) => {
-  const r = radius ?? Math.round(size * 0.22)
+// Compone el logo centrado en un cuadrado de lado `size`, con `pad` px de
+// margen por lado (safe zone). Devuelve un PNG.
+const icon = async (file, { size, pad = Math.round(size * 0.12) }) => {
   const inner = size - pad * 2
-  const fs = Math.round(inner * 0.42)
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="${bg}"/>
-      <stop offset="1" stop-color="${DARK}"/>
-    </linearGradient>
-  </defs>
-  <rect x="${pad}" y="${pad}" width="${inner}" height="${inner}" rx="${r}" ry="${r}" fill="url(#g)"/>
-  <text x="50%" y="50%" dy="0.02em" text-anchor="middle" dominant-baseline="central"
-    font-family="Geist, 'Segoe UI', system-ui, sans-serif" font-weight="700"
-    font-size="${fs}" letter-spacing="-0.04em" fill="#ffffff">MG</text>
-</svg>`
+  const logo = await sharp(SRC)
+    .resize(inner, inner, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .toBuffer()
+  await sharp({
+    create: { width: size, height: size, channels: 4, background: BG },
+  })
+    .composite([{ input: logo, gravity: 'center' }])
+    .png()
+    .toFile(`public/${file}`)
 }
 
-const png = async (file, opts) =>
-  sharp(Buffer.from(svg(opts))).png().toFile(`public/${file}`)
+await icon('pwa-192x192.png', { size: 192 })
+await icon('pwa-512x512.png', { size: 512 })
+// maskable: ~18% safe zone, fondo lleno hasta bordes
+await icon('pwa-maskable-512x512.png', { size: 512, pad: Math.round(512 * 0.18) })
+// apple-touch: 180, iOS recorta esquinas → fondo opaco hasta el borde
+await icon('apple-touch-icon.png', { size: 180, pad: Math.round(180 * 0.1) })
+// favicon: cuadrado pequeno para la pestana del navegador
+await icon('favicon.png', { size: 64, pad: 6 })
 
-await png('pwa-192x192.png', { size: 192 })
-await png('pwa-512x512.png', { size: 512 })
-// maskable: padding ~18% safe zone, fondo lleno hasta bordes
-await png('pwa-maskable-512x512.png', { size: 512, pad: 0, radius: 0 })
-// apple-touch: 180, sin esquinas (iOS las recorta), fondo opaco
-await png('apple-touch-icon.png', { size: 180, radius: 0 })
-
-// favicon SVG nuevo (reemplaza el morado prohibido)
-writeFileSync('public/favicon.svg', svg({ size: 64, radius: 14 }))
-console.log('icons generated')
+console.log('icons generated from', SRC)

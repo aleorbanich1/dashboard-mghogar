@@ -14,7 +14,11 @@
       "PowerShell(Get-Process node -ErrorAction SilentlyContinue)",
       "PowerShell(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 5173,4173,3000 } | Select-Object LocalPort, OwningProcess; \"---retry yarn---\"; Set-Location \"c:/Alejandro/precios-pwa\"; yarn install 2>&1 | Select-Object -Last 8)",
       "Bash(yarn build *)",
-      "Bash(yarn test *)"
+      "Bash(yarn test *)",
+      "Bash(cd /c/Alejandro/precios-pwa && grep -riE \"netlify\\\\.app|\\\\.com|\\\\.app|https://[a-z]\" --include=*.md --include=*.html --include=*.ts --include=*.tsx -l . 2>/dev/null | head; echo \"---index---\"; cat index.html 2>/dev/null | head -30)",
+      "Read(//c/c/Alejandro/**)",
+      "Bash(node -e \"const s=require\\('sharp'\\); s\\('public/logo-mghogar.png'\\).metadata\\(\\).then\\(m=>console.log\\(JSON.stringify\\({w:m.width,h:m.height,channels:m.channels,hasAlpha:m.hasAlpha}\\)\\)\\)\")",
+      "Bash(node gen-icons.mjs)"
     ]
   }
 }
