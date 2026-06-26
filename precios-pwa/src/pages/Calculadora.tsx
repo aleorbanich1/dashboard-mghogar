@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import rules from '../data/rules.json'
 import { calcularPrecio } from '../lib/calc'
-import { useTheme, type ThemePref } from '../lib/theme'
-import { signOut } from '../lib/auth'
 
 const pesos = new Intl.NumberFormat('es-AR', {
   style: 'currency',
@@ -85,29 +83,15 @@ export default function Calculadora() {
   }
 
   return (
-    <main className="min-h-[100dvh] bg-slate-50 text-slate-900 antialiased transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
-      <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col px-5 pb-10 pt-8">
-        <header className="mb-6 flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-              Calculadora de precios
-            </h1>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              Cargá los datos y obtené el precio final.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <button
-              type="button"
-              onClick={() => signOut()}
-              title="Cerrar sesión"
-              aria-label="Cerrar sesión"
-              className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              Salir
-            </button>
-          </div>
+    <main className="bg-slate-50 text-slate-900 antialiased transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
+      <div className="mx-auto flex max-w-md flex-col px-5 pb-10 pt-6">
+        <header className="mb-6">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+            Calculadora de precios
+          </h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Cargá los datos y obtené el precio final.
+          </p>
         </header>
 
         <div className="flex flex-col gap-5">
@@ -308,29 +292,6 @@ function CondicionSelect({
         </div>
       )}
     </div>
-  )
-}
-
-function ThemeToggle() {
-  const { pref, cycle } = useTheme()
-
-  const meta: Record<ThemePref, { label: string; icon: ReactNode }> = {
-    system: { label: 'Tema automático', icon: <MonitorIcon /> },
-    light: { label: 'Tema claro', icon: <SunIcon /> },
-    dark: { label: 'Tema oscuro', icon: <MoonIcon /> },
-  }
-  const current = meta[pref]
-
-  return (
-    <button
-      type="button"
-      onClick={cycle}
-      aria-label={`${current.label}. Tocar para cambiar.`}
-      title={current.label}
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition active:scale-95 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:active:bg-slate-800"
-    >
-      {current.icon}
-    </button>
   )
 }
 
@@ -649,32 +610,6 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
 }
 
 /* Íconos inline (sin dependencias, sin emojis), trazo 1.5 consistente. */
-function SunIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-    </svg>
-  )
-}
-
-function MoonIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-    </svg>
-  )
-}
-
-function MonitorIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="2" y="3" width="20" height="14" rx="2" />
-      <path d="M8 21h8M12 17v4" />
-    </svg>
-  )
-}
-
 function ChevronDownIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

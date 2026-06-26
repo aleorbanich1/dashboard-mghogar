@@ -9,6 +9,11 @@ const ACCENT = '#059669'
 const BACKGROUND = '#0f172a'
 
 export default defineConfig({
+  // Puerto fijo para que el origin (localhost:4173) no cambie entre
+  // ejecuciones → la sesion de Supabase guardada en localStorage persiste y
+  // solo hay que iniciar sesion una vez.
+  preview: { port: 4173, strictPort: true, host: '127.0.0.1' },
+  server: { port: 4173, strictPort: true, host: '127.0.0.1' },
   plugins: [
     tailwindcss(),
     react(),

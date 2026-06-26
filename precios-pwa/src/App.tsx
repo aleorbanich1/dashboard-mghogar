@@ -1,13 +1,17 @@
+import { useState } from 'react'
 import Calculadora from './pages/Calculadora'
+import Clientes from './pages/Clientes'
 import Login from './pages/Login'
+import TopBar, { type Tab } from './components/TopBar'
 import { useSession } from './lib/auth'
 
 function App() {
   const { session, loading } = useSession()
+  const [tab, setTab] = useState<Tab>('precios')
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400">
         Cargando…
       </div>
     )
@@ -15,7 +19,12 @@ function App() {
 
   if (!session) return <Login />
 
-  return <Calculadora />
+  return (
+    <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950">
+      <TopBar tab={tab} onTab={setTab} />
+      {tab === 'precios' ? <Calculadora /> : <Clientes />}
+    </div>
+  )
 }
 
 export default App

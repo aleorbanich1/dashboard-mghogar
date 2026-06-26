@@ -4,33 +4,22 @@ import { supabase } from '../lib/supabase'
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [modo, setModo] = useState<'login' | 'registro'>('login')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [aviso, setAviso] = useState<string | null>(null)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    setAviso(null)
     setCargando(true)
 
     try {
-      if (modo === 'registro') {
-        const { data, error } = await supabase.auth.signUp({ email, password })
-        if (error) throw error
-        if (data.session) {
-          // Sesión activa: el listener de auth redirige solo.
-        } else {
-          setAviso('Cuenta creada. Revisá tu email para confirmar y luego iniciá sesión.')
-          setModo('login')
-        }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
+      // Sesión activa: el listener de auth redirige solo.
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido')
+      setError(
+        err instanceof Error ? traducirError(err.message) : 'Error desconocido',
+      )
     } finally {
       setCargando(false)
     }
@@ -42,9 +31,7 @@ export default function Login() {
         onSubmit={onSubmit}
         className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm"
       >
-        <h1 className="text-xl font-semibold mb-1">
-          {modo === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
-        </h1>
+        <h1 className="text-xl font-semibold mb-1">Iniciar sesión</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
           Calculadora de precios
         </p>
@@ -69,8 +56,7 @@ export default function Login() {
           id="password"
           type="password"
           required
-          minLength={6}
-          autoComplete={modo === 'login' ? 'current-password' : 'new-password'}
+          autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full mb-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-transparent px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
@@ -79,32 +65,25 @@ export default function Login() {
         {error && (
           <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>
         )}
-        {aviso && (
-          <p className="mb-3 text-sm text-emerald-600 dark:text-emerald-400">{aviso}</p>
-        )}
 
         <button
           type="submit"
           disabled={cargando}
           className="w-full rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium py-2 transition-colors"
         >
-          {cargando ? 'Procesando…' : modo === 'login' ? 'Entrar' : 'Registrarme'}
+          {cargando ? 'Procesando…' : 'Entrar'}
         </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            setModo(modo === 'login' ? 'registro' : 'login')
-            setError(null)
-            setAviso(null)
-          }}
-          className="w-full mt-3 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-        >
-          {modo === 'login'
-            ? '¿No tenés cuenta? Crear una'
-            : '¿Ya tenés cuenta? Iniciar sesión'}
-        </button>
+        <p className="mt-4 text-center text-xs text-slate-400 dark:text-slate-500">
+          Las cuentas las crea el administrador. Si no podés entrar, pedí acceso.
+        </p>
       </form>
     </div>
   )
+}
+
+function traducirError(msg: string): string {
+  if (/invalid login credentials/i.test(msg)) return 'Email o contraseña incorrectos.'
+  if (/email not confirmed/i.test(msg)) return 'La cuenta todavía no está confirmada.'
+  return msg
 }
