@@ -3,6 +3,13 @@
   command = "yarn build"
   publish = "dist"
 
+[functions]
+  # Functions de la API (precio.mts, condiciones.mts). Ruta relativa a `base`.
+  directory   = "netlify/functions"
+  node_bundler = "esbuild"
+
+# /api/* lo resuelven las Netlify Functions (ver `config.path` en cada .mts).
+# El catch-all SPA va último para no tapar la API.
 [[redirects]]
   from   = "/*"
   to     = "/index.html"

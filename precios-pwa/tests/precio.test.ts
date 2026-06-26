@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import handler from './precio.mts'
+import handler from '../netlify/functions/precio.mts'
 
 beforeAll(() => {
   process.env.API_TOKEN = 'secreto-test'
