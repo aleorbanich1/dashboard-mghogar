@@ -1,27 +1,45 @@
 import { useEffect, useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
-import { supabase } from './supabase'
+
+export interface Usuario {
+  id: string
+  nombre: string
+  rol: string
+}
 
 export function useSession() {
-  const [session, setSession] = useState<Session | null>(null)
+  const [session, setSession] = useState<Usuario | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
+    function load() {
+      const stored = localStorage.getItem('usuario_sesion')
+      if (stored) {
+        try {
+          setSession(JSON.parse(stored))
+        } catch (err) {
+          localStorage.removeItem('usuario_sesion')
+          setSession(null)
+        }
+      } else {
+        setSession(null)
+      }
       setLoading(false)
-    })
+    }
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s)
-    })
-
-    return () => sub.subscription.unsubscribe()
+    load()
+    window.addEventListener('session_changed', load)
+    return () => window.removeEventListener('session_changed', load)
   }, [])
 
   return { session, loading }
 }
 
+export function setLocalSession(user: Usuario) {
+  localStorage.setItem('usuario_sesion', JSON.stringify(user))
+  window.dispatchEvent(new Event('session_changed'))
+}
+
 export function signOut() {
-  return supabase.auth.signOut()
+  localStorage.removeItem('usuario_sesion')
+  window.location.reload()
 }
