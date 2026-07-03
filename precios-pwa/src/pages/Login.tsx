@@ -2,11 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { setLocalSession } from '../lib/auth'
 
-interface Props {
-  onRegister: () => void
-}
-
-export default function Login({ onRegister }: Props) {
+export default function Login() {
   const [usuario, setUsuario] = useState('')
   const [password, setPassword] = useState('')
   const [cargando, setCargando] = useState(false)
@@ -84,19 +80,6 @@ export default function Login({ onRegister }: Props) {
         >
           {cargando ? 'Procesando…' : 'Entrar'}
         </button>
-
-        <div className="mt-4 text-center">
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">
-            ¿No tenés cuenta?
-          </p>
-          <button
-            type="button"
-            onClick={onRegister}
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-medium py-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            Crear cuenta
-          </button>
-        </div>
       </form>
     </div>
   )

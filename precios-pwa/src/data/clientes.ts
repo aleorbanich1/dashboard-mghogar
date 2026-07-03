@@ -40,6 +40,12 @@ export const TONE_COLOR: Record<VisitTone, string> = {
   busca: '#0284c7', // sky-600: demanda concreta
 }
 
+/** Color para los tipos de visita personalizados (los que carga el negocio). */
+export const CUSTOM_VISIT_COLOR = '#7c3aed' // violet-600
+
+/** Color para los empleados en los gráficos de "quién atiende / convierte". */
+export const EMPLEADO_COLOR = '#0d9488' // teal-600
+
 export const PRODUCT_CATEGORIES_SEED: string[] = [
   'Termos',
   'Mesas de TV',

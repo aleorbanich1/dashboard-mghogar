@@ -2,49 +2,86 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   VISIT_TYPES,
   TONE_COLOR,
-  type VisitTypeId,
-  type VisitType,
+  CUSTOM_VISIT_COLOR,
+  EMPLEADO_COLOR,
 } from '../data/clientes'
 import {
   loadRegistros,
   addRegistro,
   loadAllCategories,
   addCategory,
+  loadEmpleados,
+  loadCustomVisitTypes,
+  addVisitType,
   type Registro,
+  type Empleado,
 } from '../lib/registros'
 import { BarChart, type BarDatum } from '../components/charts'
 
-type Periodo = 'semana' | 'todo'
+/* ---------- Helpers de fechas (para el rango) ---------- */
 
-function inicioSemana(now = new Date()): number {
-  // Semana ISO: arranca lunes 00:00 local.
-  const d = new Date(now)
+function toISODate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function lunesDeEstaSemana(): string {
+  const d = new Date()
   const dia = (d.getDay() + 6) % 7 // 0 = lunes
-  d.setHours(0, 0, 0, 0)
   d.setDate(d.getDate() - dia)
-  return d.getTime()
+  return toISODate(d)
+}
+
+/** Opción de visita: id fijo o nombre de tipo personalizado. */
+interface VisitOption {
+  value: string
+  label: string
+  color: string
 }
 
 export default function Clientes() {
   const [registros, setRegistros] = useState<Registro[]>([])
   const [categorias, setCategorias] = useState<string[]>([])
+  const [empleados, setEmpleados] = useState<Empleado[]>([])
+  const [customTypes, setCustomTypes] = useState<string[]>([])
 
   // Selección en curso del empleado.
-  const [visit, setVisit] = useState<VisitTypeId | null>(null)
+  const [visit, setVisit] = useState<string | null>(null)
   const [demand, setDemand] = useState<string | null>(null)
+  // Empleado que atendió; lo elige el admin en cada registro (arranca sin asignar).
+  const [empleadoId, setEmpleadoId] = useState<string | null>(null)
   const [nuevaCat, setNuevaCat] = useState('')
+  const [nuevoTipo, setNuevoTipo] = useState('')
   const [guardado, setGuardado] = useState(false)
 
-  const [periodo, setPeriodo] = useState<Periodo>('semana')
+  // Rango de fechas para las estadísticas.
+  const [desde, setDesde] = useState<string>(lunesDeEstaSemana())
+  const [hasta, setHasta] = useState<string>(toISODate(new Date()))
 
   useEffect(() => {
     loadRegistros().then(setRegistros)
     loadAllCategories().then(setCategorias)
+    loadEmpleados().then(setEmpleados)
+    loadCustomVisitTypes().then(setCustomTypes)
   }, [])
+
+  const visitOptions: VisitOption[] = useMemo(
+    () => [
+      ...VISIT_TYPES.map((v) => ({
+        value: v.id,
+        label: v.label,
+        color: TONE_COLOR[v.tone],
+      })),
+      ...customTypes.map((n) => ({ value: n, label: n, color: CUSTOM_VISIT_COLOR })),
+    ],
+    [customTypes],
+  )
 
   async function registrar() {
     if (!visit) return
-    const next = await addRegistro({ visit, demand })
+    const next = await addRegistro({ visit, demand, userId: empleadoId })
     setRegistros(next)
     setVisit(null)
     setDemand(null)
@@ -62,11 +99,21 @@ export default function Clientes() {
     setDemand(next.find((c) => c.toLowerCase() === name.toLowerCase()) ?? null)
   }
 
+  async function agregarTipo() {
+    const name = nuevoTipo.trim()
+    if (!name) return
+    const next = await addVisitType(name)
+    setCustomTypes(next)
+    setNuevoTipo('')
+    // Deja seleccionado el nuevo tipo para registrarlo al toque.
+    setVisit(next.find((t) => t.toLowerCase() === name.toLowerCase()) ?? name)
+  }
+
   const filtrados = useMemo(() => {
-    if (periodo === 'todo') return registros
-    const desde = inicioSemana()
-    return registros.filter((r) => r.ts >= desde)
-  }, [registros, periodo])
+    const desdeMs = desde ? new Date(`${desde}T00:00:00`).getTime() : -Infinity
+    const hastaMs = hasta ? new Date(`${hasta}T23:59:59.999`).getTime() : Infinity
+    return registros.filter((r) => r.ts >= desdeMs && r.ts <= hastaMs)
+  }, [registros, desde, hasta])
 
   return (
     <main className="bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
@@ -84,21 +131,81 @@ export default function Clientes() {
         <section className="flex flex-col gap-3">
           <SectionTitle paso="1" title="¿Qué hizo la persona?" />
           <div className="flex flex-col gap-3">
-            {VISIT_TYPES.map((v) => (
+            {visitOptions.map((o) => (
               <VisitButton
-                key={v.id}
-                visit={v}
-                selected={visit === v.id}
-                onSelect={() => setVisit(visit === v.id ? null : v.id)}
+                key={o.value}
+                label={o.label}
+                color={o.color}
+                selected={visit === o.value}
+                onSelect={() => setVisit(visit === o.value ? null : o.value)}
               />
             ))}
           </div>
+
+          {/* Caja para sumar tipos de cliente al catálogo único */}
+          <div className="mt-2 flex flex-col gap-2">
+            <label
+              htmlFor="nuevo-tipo"
+              className="text-sm font-medium text-slate-700 dark:text-slate-300"
+            >
+              Agregar otro tipo de cliente
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="nuevo-tipo"
+                value={nuevoTipo}
+                autoComplete="off"
+                placeholder="Ej: Vino a pagar una cuota"
+                onChange={(e) => setNuevoTipo(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    agregarTipo()
+                  }
+                }}
+                className="min-h-[52px] flex-1 rounded-xl border border-slate-200 bg-white px-4 text-base text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/25"
+              />
+              <button
+                type="button"
+                onClick={agregarTipo}
+                disabled={!nuevoTipo.trim()}
+                className="min-h-[52px] shrink-0 rounded-xl bg-emerald-600 px-5 text-base font-semibold text-white transition active:scale-[0.97] disabled:opacity-40 dark:bg-emerald-500 dark:text-slate-950"
+              >
+                Agregar
+              </button>
+            </div>
+            <span className="text-xs text-slate-400 dark:text-slate-500">
+              Se carga una sola vez y queda disponible para todos.
+            </span>
+          </div>
         </section>
 
-        {/* PASO 2 — Demanda no cubierta */}
+        {/* PASO 2 — Quién atendió */}
         <section className="flex flex-col gap-3 border-t border-slate-200 pt-7 dark:border-slate-800">
           <SectionTitle
             paso="2"
+            title="¿Quién atendió?"
+            hint="Se guarda para medir quién atiende y quién convierte más."
+          />
+          <select
+            value={empleadoId ?? ''}
+            onChange={(e) => setEmpleadoId(e.target.value || null)}
+            aria-label="Empleado que atendió"
+            className="min-h-[52px] w-full rounded-xl border border-slate-200 bg-white px-4 text-base text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/25"
+          >
+            <option value="">Sin asignar</option>
+            {empleados.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.nombre}
+              </option>
+            ))}
+          </select>
+        </section>
+
+        {/* PASO 3 — Demanda no cubierta */}
+        <section className="flex flex-col gap-3 border-t border-slate-200 pt-7 dark:border-slate-800">
+          <SectionTitle
+            paso="3"
             title="¿Pidió algo que no tenemos?"
             hint="Opcional. Elegí la categoría del producto que pidió."
           />
@@ -183,20 +290,50 @@ export default function Clientes() {
 
         {/* Gráficos */}
         <section className="flex flex-col gap-6 border-t border-slate-200 pt-7 dark:border-slate-800">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3">
             <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-50">
               Estadísticas
             </h2>
-            <PeriodoToggle value={periodo} onChange={setPeriodo} />
+            <RangoFechas
+              desde={desde}
+              hasta={hasta}
+              onDesde={setDesde}
+              onHasta={setHasta}
+            />
           </div>
 
           <Resumen registros={filtrados} />
 
           <ChartCard title="Embudo de visitas">
             <BarChart
-              data={dataVisitas(filtrados)}
+              data={dataVisitas(filtrados, visitOptions)}
               unit="pers."
               emptyHint="Registrá visitas para ver el embudo."
+            />
+          </ChartCard>
+
+          <ChartCard
+            title="Quién atiende más"
+            subtitle="Visitas registradas por cada empleado en el período."
+          >
+            <BarChart
+              data={dataPorEmpleado(filtrados, empleados)}
+              unit="vis."
+              emptyHint="Todavía no hay visitas con empleado asignado."
+            />
+          </ChartCard>
+
+          <ChartCard
+            title="Quién convierte más"
+            subtitle="Ventas cerradas (preguntó precio y compró) por empleado."
+          >
+            <BarChart
+              data={dataPorEmpleado(
+                filtrados.filter((r) => r.visit === 'pregunto_compro'),
+                empleados,
+              )}
+              unit="vent."
+              emptyHint="Todavía no hay ventas registradas."
             />
           </ChartCard>
 
@@ -218,11 +355,11 @@ export default function Clientes() {
 
 /* ---------- Cálculo de datos para gráficos ---------- */
 
-function dataVisitas(registros: Registro[]): BarDatum[] {
-  return VISIT_TYPES.map((v) => ({
-    label: v.label,
-    value: registros.filter((r) => r.visit === v.id).length,
-    color: TONE_COLOR[v.tone],
+function dataVisitas(registros: Registro[], opciones: VisitOption[]): BarDatum[] {
+  return opciones.map((o) => ({
+    label: o.label,
+    value: registros.filter((r) => r.visit === o.value).length,
+    color: o.color,
   }))
 }
 
@@ -237,7 +374,74 @@ function dataDemanda(registros: Registro[]): BarDatum[] {
     .map(([label, value]) => ({ label, value, color: TONE_COLOR.busca }))
 }
 
+function dataPorEmpleado(registros: Registro[], empleados: Empleado[]): BarDatum[] {
+  const nombreDe = (id: string | null): string => {
+    if (!id) return 'Sin asignar'
+    return empleados.find((e) => e.id === id)?.nombre ?? '—'
+  }
+  const cuenta = new Map<string, number>()
+  for (const r of registros) {
+    const nombre = nombreDe(r.userId)
+    cuenta.set(nombre, (cuenta.get(nombre) ?? 0) + 1)
+  }
+  return [...cuenta.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, value]) => ({ label, value, color: EMPLEADO_COLOR }))
+}
+
 /* ---------- Subcomponentes ---------- */
+
+function RangoFechas({
+  desde,
+  hasta,
+  onDesde,
+  onHasta,
+}: {
+  desde: string
+  hasta: string
+  onDesde: (v: string) => void
+  onHasta: (v: string) => void
+}) {
+  return (
+    <div className="flex items-end gap-2">
+      <DateField id="fecha-desde" label="Desde" value={desde} max={hasta} onChange={onDesde} />
+      <DateField id="fecha-hasta" label="Hasta" value={hasta} min={desde} onChange={onHasta} />
+    </div>
+  )
+}
+
+function DateField({
+  id,
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: string
+  min?: string
+  max?: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="flex flex-1 flex-col gap-1">
+      <label htmlFor={id} className="text-xs font-medium text-slate-500 dark:text-slate-400">
+        {label}
+      </label>
+      <input
+        id={id}
+        type="date"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => onChange(e.target.value)}
+        className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-3 text-sm tabular-nums text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/25 dark:[color-scheme:dark]"
+      />
+    </div>
+  )
+}
 
 function Resumen({ registros }: { registros: Registro[] }) {
   const total = registros.length
@@ -272,41 +476,6 @@ function Stat({
         {value}
       </span>
       <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</span>
-    </div>
-  )
-}
-
-function PeriodoToggle({
-  value,
-  onChange,
-}: {
-  value: Periodo
-  onChange: (p: Periodo) => void
-}) {
-  const opciones: { id: Periodo; label: string }[] = [
-    { id: 'semana', label: 'Semana' },
-    { id: 'todo', label: 'Todo' },
-  ]
-  return (
-    <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/60">
-      {opciones.map((o) => {
-        const active = o.id === value
-        return (
-          <button
-            key={o.id}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onChange(o.id)}
-            className={`min-h-[36px] rounded-lg px-3 text-xs font-semibold transition ${
-              active
-                ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-900 dark:text-emerald-400'
-                : 'text-slate-500 dark:text-slate-400'
-            }`}
-          >
-            {o.label}
-          </button>
-        )
-      })}
     </div>
   )
 }
@@ -354,15 +523,16 @@ function SectionTitle({
 }
 
 function VisitButton({
-  visit,
+  label,
+  color,
   selected,
   onSelect,
 }: {
-  visit: VisitType
+  label: string
+  color: string
   selected: boolean
   onSelect: () => void
 }) {
-  const color = TONE_COLOR[visit.tone]
   return (
     <button
       type="button"
@@ -375,7 +545,7 @@ function VisitButton({
           : 'border-slate-200 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
       }`}
     >
-      <span className="flex-1">{visit.label}</span>
+      <span className="flex-1">{label}</span>
       {selected && <CheckIcon />}
     </button>
   )

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import rules from '../data/rules.json'
-import { calcularPrecio } from '../lib/calc'
+import { calcularPrecio, type CalcResult } from '../lib/calc'
 
 const pesos = new Intl.NumberFormat('es-AR', {
   style: 'currency',
@@ -48,6 +48,7 @@ export default function Calculadora() {
   const [masDeCinco, setMasDeCinco] = useState(false)
   const [tasaRaw, setTasaRaw] = useState('6')
   const [cuotas, setCuotas] = useState<number | null>(null)
+  const [producto, setProducto] = useState('')
 
   const precioLista = useMemo(() => parseMoney(precioListaRaw), [precioListaRaw])
   const precioContado = useMemo(() => parseMoney(precioContadoRaw), [precioContadoRaw])
@@ -80,6 +81,7 @@ export default function Calculadora() {
     setMasDeCinco(false)
     setTasaRaw('6')
     setCuotas(null)
+    setProducto('')
   }
 
   return (
@@ -139,6 +141,10 @@ export default function Calculadora() {
         </div>
 
         <Resultado result={result} />
+
+        {result.tipo === 'ok' && (
+          <PdfPresupuesto producto={producto} onProducto={setProducto} result={result} />
+        )}
 
         <button
           type="button"
@@ -582,6 +588,160 @@ function Resultado({ result }: { result: ReturnType<typeof calcularPrecio> }) {
         Precio de {baseLabel[result.base]} × {factorPct} = {pesos.format(result.precio)}
       </p>
     </div>
+  )
+}
+
+/* ---------- PDF / Presupuesto para el cliente ---------- */
+
+type OkResult = Extract<CalcResult, { tipo: 'ok' }>
+
+interface DatosPago {
+  modalidad: string
+  cuotas?: number
+  porCuota?: number
+  total: number
+}
+
+/** Extrae SOLO lo que ve el cliente: modalidad y montos. Nada de factores ni tasas. */
+function datosPago(result: OkResult): DatosPago {
+  const total = result.precio
+  if ('cuotas' in result) {
+    return { modalidad: result.regla, cuotas: result.cuotas, porCuota: result.precioPorCuota, total }
+  }
+  if (result.cuotasFijas && result.precioPorCuota !== undefined) {
+    return { modalidad: result.regla, cuotas: result.cuotasFijas, porCuota: result.precioPorCuota, total }
+  }
+  return { modalidad: result.regla, total }
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/** HTML autocontenido del presupuesto, pensado para imprimir / guardar como PDF. */
+function presupuestoHTML(producto: string, d: DatosPago): string {
+  const fecha = new Date().toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+  const nombre = producto.trim() || 'Producto'
+
+  const detalle = d.cuotas
+    ? `
+      <tr><th>Modalidad de pago</th><td>${escapeHtml(d.modalidad)}</td></tr>
+      <tr><th>Cuotas</th><td>${d.cuotas} cuotas de <strong>${pesos.format(d.porCuota ?? 0)}</strong></td></tr>
+      <tr class="total"><th>Total</th><td>${pesos.format(d.total)}</td></tr>`
+    : `
+      <tr><th>Modalidad de pago</th><td>${escapeHtml(d.modalidad)}</td></tr>
+      <tr class="total"><th>Precio final</th><td>${pesos.format(d.total)}</td></tr>`
+
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Presupuesto - ${escapeHtml(nombre)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #0f172a; margin: 0; padding: 32px; }
+    .doc { max-width: 620px; margin: 0 auto; }
+    .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #059669; padding-bottom: 16px; }
+    .brand { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: #059669; }
+    .brand small { display:block; font-size: 12px; font-weight: 600; color:#64748b; letter-spacing: 0; }
+    .fecha { font-size: 13px; color: #64748b; text-align: right; }
+    h1 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; color:#64748b; margin: 28px 0 4px; }
+    .prod { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 24px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 12px 4px; border-bottom: 1px solid #e2e8f0; font-size: 15px; }
+    th { color: #64748b; font-weight: 600; width: 45%; }
+    td { text-align: right; font-variant-numeric: tabular-nums; }
+    tr.total th, tr.total td { font-size: 22px; font-weight: 800; color: #059669; border-bottom: none; padding-top: 18px; }
+    .pie { margin-top: 40px; font-size: 12px; color: #94a3b8; text-align: center; }
+    @media print { body { padding: 0; } .doc { max-width: none; } }
+  </style></head>
+  <body><div class="doc">
+    <div class="head">
+      <div class="brand">MG Hogar<small>Presupuesto</small></div>
+      <div class="fecha">Fecha<br>${fecha}</div>
+    </div>
+    <h1>Producto</h1>
+    <p class="prod">${escapeHtml(nombre)}</p>
+    <table><tbody>${detalle}</tbody></table>
+    <p class="pie">Presupuesto sin compromiso. Precios sujetos a cambios.</p>
+  </div>
+  <script>window.onload = function () { window.focus(); window.print(); }</script>
+  </body></html>`
+}
+
+/** Abre el presupuesto en un iframe oculto y dispara el diálogo de impresión / PDF. */
+function generarPDF(producto: string, result: OkResult) {
+  const html = presupuestoHTML(producto, datosPago(result))
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '0'
+  iframe.style.height = '0'
+  iframe.style.border = '0'
+  iframe.srcdoc = html
+  iframe.onload = () => {
+    // El diálogo bloquea; al cerrarlo, limpiamos el iframe.
+    window.setTimeout(() => iframe.remove(), 60000)
+  }
+  document.body.appendChild(iframe)
+}
+
+function PdfPresupuesto({
+  producto,
+  onProducto,
+  result,
+}: {
+  producto: string
+  onProducto: (v: string) => void
+  result: OkResult
+}) {
+  return (
+    <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex flex-col gap-0.5">
+        <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+          Presupuesto para el cliente
+        </span>
+        <span className="text-xs text-slate-500 dark:text-slate-400">
+          Ponele el nombre del producto y generá un PDF limpio (sin criterios internos).
+        </span>
+      </div>
+      <input
+        id="nombre-producto"
+        type="text"
+        autoComplete="off"
+        placeholder="Nombre del producto (ej: Heladera Whirlpool 375L)"
+        value={producto}
+        onChange={(e) => onProducto(e.target.value)}
+        className="min-h-[52px] w-full rounded-xl border border-slate-200 bg-white px-4 text-base text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/25"
+      />
+      <button
+        type="button"
+        onClick={() => generarPDF(producto, result)}
+        disabled={!producto.trim()}
+        className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-slate-900 text-base font-bold text-white transition active:scale-[0.98] disabled:opacity-40 dark:bg-emerald-500 dark:text-slate-950"
+      >
+        <PdfIcon />
+        Generar PDF
+      </button>
+    </div>
+  )
+}
+
+function PdfIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M9 15h6M9 18h4" />
+    </svg>
   )
 }
 

@@ -7,21 +7,23 @@
  */
 
 import { supabase } from './supabase'
-import type { VisitTypeId } from '../data/clientes'
 
 export interface Registro {
   id: string
   ts: number // epoch ms (derivado de created_at)
-  visit: VisitTypeId
+  // Id fijo (ver VISIT_TYPES) o el nombre de un tipo personalizado (tipos_visita).
+  visit: string
   demand: string | null // nombre de categoría pedida sin stock, o null
+  userId: string | null // empleado que atendió (registros.user_id), o null
 }
 
 // Fila tal como vuelve de Supabase.
 interface RegistroRow {
   id: string
   created_at: string
-  visit: VisitTypeId
+  visit: string
   demand: string | null
+  user_id: string | null
 }
 
 function mapRow(row: RegistroRow): Registro {
@@ -30,6 +32,7 @@ function mapRow(row: RegistroRow): Registro {
     ts: new Date(row.created_at).getTime(),
     visit: row.visit,
     demand: row.demand,
+    userId: row.user_id,
   }
 }
 
@@ -37,7 +40,7 @@ function mapRow(row: RegistroRow): Registro {
 export async function loadRegistros(): Promise<Registro[]> {
   const { data, error } = await supabase
     .from('registros')
-    .select('id, created_at, visit, demand')
+    .select('id, created_at, visit, demand, user_id')
     .order('created_at', { ascending: true })
 
   if (error) {
@@ -49,18 +52,75 @@ export async function loadRegistros(): Promise<Registro[]> {
 
 /** Inserta un registro y devuelve la lista completa actualizada. */
 export async function addRegistro(input: {
-  visit: VisitTypeId
+  visit: string
   demand: string | null
+  userId: string | null
 }): Promise<Registro[]> {
   const { error } = await supabase
     .from('registros')
-    .insert({ visit: input.visit, demand: input.demand })
+    .insert({ visit: input.visit, demand: input.demand, user_id: input.userId })
 
   if (error) {
     console.error('Error guardando registro:', error.message)
     throw new Error(error.message)
   }
   return loadRegistros()
+}
+
+/* ---------- Equipo (empleados) ---------- */
+
+export interface Empleado {
+  id: string
+  nombre: string
+}
+
+/**
+ * Lista el equipo para el desplegable de "quién atendió".
+ * Usa la función listar_empleados() (SECURITY DEFINER): expone solo id + nombre,
+ * nunca el password.
+ */
+export async function loadEmpleados(): Promise<Empleado[]> {
+  const { data, error } = await supabase.rpc('listar_empleados')
+
+  if (error) {
+    console.error('Error cargando empleados:', error.message)
+    return []
+  }
+  return (data as Empleado[]) ?? []
+}
+
+/* ---------- Tipos de visita personalizados ---------- */
+
+/** Tipos de cliente que cargó el negocio, más allá de los 4 fijos. */
+export async function loadCustomVisitTypes(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('tipos_visita')
+    .select('nombre')
+    .order('nombre', { ascending: true })
+
+  if (error) {
+    console.error('Error cargando tipos de visita:', error.message)
+    return []
+  }
+  return (data as { nombre: string }[]).map((t) => t.nombre)
+}
+
+/**
+ * Agrega un tipo de visita personalizado al catálogo único y devuelve la lista
+ * actualizada. Mismo patrón que addCategory: ignora vacíos y duplicados.
+ */
+export async function addVisitType(raw: string): Promise<string[]> {
+  const name = raw.trim()
+  if (!name) return loadCustomVisitTypes()
+
+  const { error } = await supabase.from('tipos_visita').insert({ nombre: name })
+
+  // 23505 = unique_violation: ya existía, no es un error real.
+  if (error && error.code !== '23505') {
+    console.error('Error agregando tipo de visita:', error.message)
+    throw new Error(error.message)
+  }
+  return loadCustomVisitTypes()
 }
 
 /** Catálogo completo de categorías (orden alfabético, sin duplicados). */

@@ -2,14 +2,12 @@ import { useState } from 'react'
 import Calculadora from './pages/Calculadora'
 import Clientes from './pages/Clientes'
 import Login from './pages/Login'
-import Register from './pages/Register'
 import TopBar, { type Tab } from './components/TopBar'
 import { useSession } from './lib/auth'
 
 function App() {
   const { session, loading } = useSession()
   const [tab, setTab] = useState<Tab>('precios')
-  const [authView, setAuthView] = useState<'login' | 'register'>('login')
 
   if (loading) {
     return (
@@ -20,11 +18,7 @@ function App() {
   }
 
   if (!session) {
-    return authView === 'login' ? (
-      <Login onRegister={() => setAuthView('register')} />
-    ) : (
-      <Register onBack={() => setAuthView('login')} />
-    )
+    return <Login />
   }
 
   return (
