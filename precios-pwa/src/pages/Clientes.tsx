@@ -54,6 +54,7 @@ export default function Clientes() {
   const [empleadoId, setEmpleadoId] = useState<string | null>(null)
   const [ventaAdicional, setVentaAdicional] = useState(false)
   const [esHabitual, setEsHabitual] = useState<boolean | null>(null)
+  const [factura, setFactura] = useState<boolean | null>(null)
   const [nuevaCat, setNuevaCat] = useState('')
   const [nuevoTipo, setNuevoTipo] = useState('')
   const [guardado, setGuardado] = useState(false)
@@ -89,12 +90,14 @@ export default function Clientes() {
       userId: empleadoId,
       ventaAdicional,
       esHabitual,
+      factura,
     })
     setRegistros(next)
     setVisit(null)
     setDemand(null)
     setVentaAdicional(false)
     setEsHabitual(null)
+    setFactura(null)
     setGuardado(true)
     window.setTimeout(() => setGuardado(false), 2200)
   }
@@ -120,9 +123,12 @@ export default function Clientes() {
   }
 
   const filtrados = useMemo(() => {
-    const desdeMs = desde ? new Date(`${desde}T00:00:00`).getTime() : -Infinity
-    const hastaMs = hasta ? new Date(`${hasta}T23:59:59.999`).getTime() : Infinity
-    return registros.filter((r) => r.ts >= desdeMs && r.ts <= hastaMs)
+    const a = desde ? new Date(`${desde}T00:00:00`).getTime() : -Infinity
+    const b = hasta ? new Date(`${hasta}T23:59:59.999`).getTime() : Infinity
+    // Independiente del orden en que se cargaron las fechas.
+    const lo = Math.min(a, b)
+    const hi = Math.max(a, b)
+    return registros.filter((r) => r.ts >= lo && r.ts <= hi)
   }, [registros, desde, hasta])
 
   return (
@@ -152,15 +158,38 @@ export default function Clientes() {
             ))}
           </div>
 
-          {/* Venta adicional: se desbloquea solo si compró */}
+          {/* Venta adicional: siempre disponible */}
           <VentaAdicionalCheck
             checked={ventaAdicional}
             enabled={true}
             onToggle={() => setVentaAdicional((v) => !v)}
           />
 
-          {/* Cliente nuevo o habitual */}
-          <ClienteTipoCheck value={esHabitual} onChange={setEsHabitual} />
+          {/* Factura: siempre disponible, con la aclaración */}
+          <DualChoice
+            label="Factura"
+            hint="(solo si compró)"
+            enabled={true}
+            value={factura}
+            onChange={setFactura}
+            options={[
+              { key: true, label: 'Con factura', color: '#059669', icon: <ReceiptIcon /> },
+              { key: false, label: 'Sin factura', color: '#64748b', icon: <BanIcon /> },
+            ]}
+          />
+
+          {/* Cliente nuevo o habitual: siempre disponible, con la aclaración */}
+          <DualChoice
+            label="Cliente nuevo o habitual"
+            hint="(solo si compró)"
+            enabled={true}
+            value={esHabitual}
+            onChange={setEsHabitual}
+            options={[
+              { key: false, label: 'Nuevo', color: '#0284c7', icon: <SparkIcon /> },
+              { key: true, label: 'Habitual', color: '#7c3aed', icon: <RepeatIcon /> },
+            ]}
+          />
 
           {/* Caja para sumar tipos de cliente al catálogo único */}
           <div className="mt-2 flex flex-col gap-2">
@@ -358,6 +387,31 @@ export default function Clientes() {
           </ChartCard>
 
           <ChartCard
+            title="Ventas adicionales"
+            subtitle="Quién sumó una venta extra (upselling) en el período."
+          >
+            <BarChart
+              data={dataPorEmpleado(
+                filtrados.filter((r) => r.ventaAdicional),
+                empleados,
+              )}
+              unit="adic."
+              emptyHint="Todavía no marcaste ventas adicionales."
+            />
+          </ChartCard>
+
+          <ChartCard
+            title="Clientes nuevos vs habituales"
+            subtitle="De los que marcaste, cuántos eran nuevos y cuántos habituales."
+          >
+            <BarChart
+              data={dataNuevoHabitual(filtrados)}
+              unit="pers."
+              emptyHint="Todavía no marcaste si son nuevos o habituales."
+            />
+          </ChartCard>
+
+          <ChartCard
             title="Productos más pedidos"
             subtitle="Categorías que la gente pide y no tenés en stock."
           >
@@ -394,6 +448,15 @@ function dataDemanda(registros: Registro[]): BarDatum[] {
     .map(([label, value]) => ({ label, value, color: TONE_COLOR.busca }))
 }
 
+function dataNuevoHabitual(registros: Registro[]): BarDatum[] {
+  const nuevos = registros.filter((r) => r.esHabitual === false).length
+  const habituales = registros.filter((r) => r.esHabitual === true).length
+  return [
+    { label: 'Nuevos', value: nuevos, color: '#0284c7' },
+    { label: 'Habituales', value: habituales, color: '#7c3aed' },
+  ]
+}
+
 function dataPorEmpleado(registros: Registro[], empleados: Empleado[]): BarDatum[] {
   const nombreDe = (id: string | null): string => {
     if (!id) return 'Sin asignar'
@@ -424,8 +487,8 @@ function RangoFechas({
 }) {
   return (
     <div className="flex items-end gap-2">
-      <DateField id="fecha-desde" label="Desde" value={desde} max={hasta} onChange={onDesde} />
-      <DateField id="fecha-hasta" label="Hasta" value={hasta} min={desde} onChange={onHasta} />
+      <DateField id="fecha-desde" label="Desde" value={desde} onChange={onDesde} />
+      <DateField id="fecha-hasta" label="Hasta" value={hasta} onChange={onHasta} />
     </div>
   )
 }
@@ -467,12 +530,25 @@ function Resumen({ registros }: { registros: Registro[] }) {
   const total = registros.length
   const compraron = registros.filter((r) => r.visit === 'pregunto_compro').length
   const conversion = total > 0 ? Math.round((compraron / total) * 100) : 0
+  const adicionales = registros.filter((r) => r.ventaAdicional).length
+  // Venta adicional sobre la gente que compró.
+  const adicEnCompra = registros.filter(
+    (r) => r.visit === 'pregunto_compro' && r.ventaAdicional,
+  ).length
+  const pctAdic = compraron > 0 ? Math.round((adicEnCompra / compraron) * 100) : 0
 
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-2 gap-3">
       <Stat label="Entraron" value={total} />
       <Stat label="Compraron" value={compraron} accent />
       <Stat label="Conversión" value={`${conversion}%`} accent />
+      <Stat label="Ventas adic." value={adicionales} accent />
+      <Stat
+        label="Venta adicional sobre compras"
+        value={`${pctAdic}%`}
+        accent
+        wide
+      />
     </div>
   )
 }
@@ -481,13 +557,19 @@ function Stat({
   label,
   value,
   accent,
+  wide,
 }: {
   label: string
   value: number | string
   accent?: boolean
+  wide?: boolean
 }) {
   return (
-    <div className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-white px-3 py-4 dark:border-slate-800 dark:bg-slate-900">
+    <div
+      className={`flex flex-col gap-1 rounded-2xl border border-slate-200 bg-white px-3 py-4 dark:border-slate-800 dark:bg-slate-900 ${
+        wide ? 'col-span-2' : ''
+      }`}
+    >
       <span
         className={`text-2xl font-extrabold tabular-nums tracking-tight ${
           accent ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-50'
@@ -603,36 +685,46 @@ function VentaAdicionalCheck({
   )
 }
 
-function ClienteTipoCheck({
+function DualChoice({
+  label,
+  hint,
+  options,
   value,
+  enabled,
   onChange,
 }: {
+  label: string
+  hint?: string
+  options: { key: boolean; label: string; color: string; icon: React.ReactNode }[]
   value: boolean | null
+  enabled: boolean
   onChange: (v: boolean | null) => void
 }) {
-  const opciones: { key: boolean; label: string; color: string; icon: React.ReactNode }[] = [
-    { key: false, label: 'Nuevo', color: '#0284c7', icon: <SparkIcon /> },
-    { key: true, label: 'Habitual', color: '#7c3aed', icon: <RepeatIcon /> },
-  ]
   return (
-    <div className="flex flex-col gap-2">
+    <div className={`flex flex-col gap-2 ${enabled ? '' : 'opacity-70'}`}>
       <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-        Cliente nuevo o habitual
+        {label}
+        {hint && (
+          <span className="font-normal text-slate-400 dark:text-slate-500"> {hint}</span>
+        )}
       </span>
       <div className="grid grid-cols-2 gap-3">
-        {opciones.map((o) => {
-          const active = value === o.key
+        {options.map((o) => {
+          const active = enabled && value === o.key
           return (
             <button
               key={String(o.key)}
               type="button"
               aria-pressed={active}
+              disabled={!enabled}
               onClick={() => onChange(active ? null : o.key)}
               style={active ? { backgroundColor: o.color, borderColor: o.color } : undefined}
               className={`flex min-h-[64px] items-center justify-center gap-2 rounded-2xl border text-base font-semibold transition active:scale-[0.98] ${
-                active
-                  ? 'text-white shadow-sm'
-                  : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
+                !enabled
+                  ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-600'
+                  : active
+                    ? 'text-white shadow-sm'
+                    : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
               }`}
             >
               {o.icon}
@@ -687,6 +779,24 @@ function RepeatIcon() {
       <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
       <path d="M7 22l-4-4 4-4" />
       <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+    </svg>
+  )
+}
+
+function ReceiptIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5 4 2Z" />
+      <path d="M8 7h8M8 11h8M8 15h5" />
+    </svg>
+  )
+}
+
+function BanIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="m5.6 5.6 12.8 12.8" />
     </svg>
   )
 }

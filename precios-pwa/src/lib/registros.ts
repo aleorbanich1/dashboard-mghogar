@@ -17,6 +17,7 @@ export interface Registro {
   userId: string | null // empleado que atendió (registros.user_id), o null
   ventaAdicional: boolean // se llevó algo más (solo si compró)
   esHabitual: boolean | null // true = habitual, false = nuevo, null = sin especificar
+  factura: boolean | null // true = con factura, false = sin factura, null = sin especificar
 }
 
 // Fila tal como vuelve de Supabase.
@@ -28,6 +29,7 @@ interface RegistroRow {
   user_id: string | null
   venta_adicional: boolean
   es_habitual: boolean | null
+  factura: boolean | null
 }
 
 function mapRow(row: RegistroRow): Registro {
@@ -39,6 +41,7 @@ function mapRow(row: RegistroRow): Registro {
     userId: row.user_id,
     ventaAdicional: row.venta_adicional ?? false,
     esHabitual: row.es_habitual ?? null,
+    factura: row.factura ?? null,
   }
 }
 
@@ -46,7 +49,7 @@ function mapRow(row: RegistroRow): Registro {
 export async function loadRegistros(): Promise<Registro[]> {
   const { data, error } = await supabase
     .from('registros')
-    .select('id, created_at, visit, demand, user_id, venta_adicional, es_habitual')
+    .select('id, created_at, visit, demand, user_id, venta_adicional, es_habitual, factura')
     .order('created_at', { ascending: true })
 
   if (error) {
@@ -63,6 +66,7 @@ export async function addRegistro(input: {
   userId: string | null
   ventaAdicional: boolean
   esHabitual: boolean | null
+  factura: boolean | null
 }): Promise<Registro[]> {
   const { error } = await supabase.from('registros').insert({
     visit: input.visit,
@@ -70,6 +74,7 @@ export async function addRegistro(input: {
     user_id: input.userId,
     venta_adicional: input.ventaAdicional,
     es_habitual: input.esHabitual,
+    factura: input.factura,
   })
 
   if (error) {
