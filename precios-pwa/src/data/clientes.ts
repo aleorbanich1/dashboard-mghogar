@@ -28,7 +28,7 @@ export interface VisitType {
 export const VISIT_TYPES: VisitType[] = [
   { id: 'solo_miro', label: 'Solo miró y se fue', short: 'Solo miró', tone: 'mira' },
   { id: 'pregunto_se_fue', label: 'Preguntó precio y se fue', short: 'Preguntó', tone: 'pregunta' },
-  { id: 'pregunto_compro', label: 'Preguntó precio y compró', short: 'Compró', tone: 'compra' },
+  { id: 'pregunto_compro', label: 'Compró', short: 'Compró', tone: 'compra' },
   { id: 'busco_puntual', label: 'Vino a buscar algo puntual', short: 'Buscó puntual', tone: 'busca' },
 ]
 

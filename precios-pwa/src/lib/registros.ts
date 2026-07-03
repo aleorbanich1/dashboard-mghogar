@@ -15,6 +15,8 @@ export interface Registro {
   visit: string
   demand: string | null // nombre de categoría pedida sin stock, o null
   userId: string | null // empleado que atendió (registros.user_id), o null
+  ventaAdicional: boolean // se llevó algo más (solo si compró)
+  esHabitual: boolean | null // true = habitual, false = nuevo, null = sin especificar
 }
 
 // Fila tal como vuelve de Supabase.
@@ -24,6 +26,8 @@ interface RegistroRow {
   visit: string
   demand: string | null
   user_id: string | null
+  venta_adicional: boolean
+  es_habitual: boolean | null
 }
 
 function mapRow(row: RegistroRow): Registro {
@@ -33,6 +37,8 @@ function mapRow(row: RegistroRow): Registro {
     visit: row.visit,
     demand: row.demand,
     userId: row.user_id,
+    ventaAdicional: row.venta_adicional ?? false,
+    esHabitual: row.es_habitual ?? null,
   }
 }
 
@@ -40,7 +46,7 @@ function mapRow(row: RegistroRow): Registro {
 export async function loadRegistros(): Promise<Registro[]> {
   const { data, error } = await supabase
     .from('registros')
-    .select('id, created_at, visit, demand, user_id')
+    .select('id, created_at, visit, demand, user_id, venta_adicional, es_habitual')
     .order('created_at', { ascending: true })
 
   if (error) {
@@ -55,10 +61,16 @@ export async function addRegistro(input: {
   visit: string
   demand: string | null
   userId: string | null
+  ventaAdicional: boolean
+  esHabitual: boolean | null
 }): Promise<Registro[]> {
-  const { error } = await supabase
-    .from('registros')
-    .insert({ visit: input.visit, demand: input.demand, user_id: input.userId })
+  const { error } = await supabase.from('registros').insert({
+    visit: input.visit,
+    demand: input.demand,
+    user_id: input.userId,
+    venta_adicional: input.ventaAdicional,
+    es_habitual: input.esHabitual,
+  })
 
   if (error) {
     console.error('Error guardando registro:', error.message)

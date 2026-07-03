@@ -52,6 +52,8 @@ export default function Clientes() {
   const [demand, setDemand] = useState<string | null>(null)
   // Empleado que atendió; lo elige el admin en cada registro (arranca sin asignar).
   const [empleadoId, setEmpleadoId] = useState<string | null>(null)
+  const [ventaAdicional, setVentaAdicional] = useState(false)
+  const [esHabitual, setEsHabitual] = useState<boolean | null>(null)
   const [nuevaCat, setNuevaCat] = useState('')
   const [nuevoTipo, setNuevoTipo] = useState('')
   const [guardado, setGuardado] = useState(false)
@@ -81,10 +83,18 @@ export default function Clientes() {
 
   async function registrar() {
     if (!visit) return
-    const next = await addRegistro({ visit, demand, userId: empleadoId })
+    const next = await addRegistro({
+      visit,
+      demand,
+      userId: empleadoId,
+      ventaAdicional,
+      esHabitual,
+    })
     setRegistros(next)
     setVisit(null)
     setDemand(null)
+    setVentaAdicional(false)
+    setEsHabitual(null)
     setGuardado(true)
     window.setTimeout(() => setGuardado(false), 2200)
   }
@@ -141,6 +151,16 @@ export default function Clientes() {
               />
             ))}
           </div>
+
+          {/* Venta adicional: se desbloquea solo si compró */}
+          <VentaAdicionalCheck
+            checked={ventaAdicional}
+            enabled={true}
+            onToggle={() => setVentaAdicional((v) => !v)}
+          />
+
+          {/* Cliente nuevo o habitual */}
+          <ClienteTipoCheck value={esHabitual} onChange={setEsHabitual} />
 
           {/* Caja para sumar tipos de cliente al catálogo único */}
           <div className="mt-2 flex flex-col gap-2">
@@ -206,7 +226,7 @@ export default function Clientes() {
         <section className="flex flex-col gap-3 border-t border-slate-200 pt-7 dark:border-slate-800">
           <SectionTitle
             paso="3"
-            title="¿Pidió algo que no tenemos?"
+            title="¿Qué pidió?"
             hint="Opcional. Elegí la categoría del producto que pidió."
           />
           <div className="grid grid-cols-2 gap-3">
@@ -519,6 +539,155 @@ function SectionTitle({
       </div>
       {hint && <p className="pl-8 text-xs text-slate-500 dark:text-slate-400">{hint}</p>}
     </div>
+  )
+}
+
+function VentaAdicionalCheck({
+  checked,
+  enabled,
+  onToggle,
+}: {
+  checked: boolean
+  enabled: boolean
+  onToggle: () => void
+}) {
+  const estado = !enabled ? 'off-disabled' : checked ? 'on' : 'off'
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      disabled={!enabled}
+      onClick={onToggle}
+      className={`flex min-h-[68px] w-full items-center gap-3 rounded-2xl border px-4 text-left transition active:scale-[0.98] ${
+        estado === 'off-disabled'
+          ? 'cursor-not-allowed border-slate-200 bg-slate-100 opacity-70 dark:border-slate-800 dark:bg-slate-900/50'
+          : estado === 'on'
+            ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm dark:border-emerald-500 dark:bg-emerald-500 dark:text-slate-950'
+            : 'border-slate-200 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
+      }`}
+    >
+      <span
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+          estado === 'off-disabled'
+            ? 'bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600'
+            : estado === 'on'
+              ? 'bg-white/20 text-white dark:text-slate-950'
+              : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+        }`}
+      >
+        <CartPlusIcon />
+      </span>
+      <span className="flex flex-1 flex-col gap-0.5">
+        <span
+          className={`text-lg font-semibold ${
+            estado === 'off-disabled' ? 'text-slate-400 dark:text-slate-600' : ''
+          }`}
+        >
+          Venta adicional
+        </span>
+        <span
+          className={`text-xs ${
+            estado === 'on'
+              ? 'text-white/80 dark:text-slate-950/70'
+              : 'text-slate-500 dark:text-slate-400'
+          }`}
+        >
+          {enabled
+            ? 'Se llevó algo más de lo que venía a buscar.'
+            : 'Se desbloquea si compró o vino a buscar algo puntual.'}
+        </span>
+      </span>
+      <CheckSquare checked={estado === 'on'} />
+    </button>
+  )
+}
+
+function ClienteTipoCheck({
+  value,
+  onChange,
+}: {
+  value: boolean | null
+  onChange: (v: boolean | null) => void
+}) {
+  const opciones: { key: boolean; label: string; color: string; icon: React.ReactNode }[] = [
+    { key: false, label: 'Nuevo', color: '#0284c7', icon: <SparkIcon /> },
+    { key: true, label: 'Habitual', color: '#7c3aed', icon: <RepeatIcon /> },
+  ]
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+        Cliente nuevo o habitual
+      </span>
+      <div className="grid grid-cols-2 gap-3">
+        {opciones.map((o) => {
+          const active = value === o.key
+          return (
+            <button
+              key={String(o.key)}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(active ? null : o.key)}
+              style={active ? { backgroundColor: o.color, borderColor: o.color } : undefined}
+              className={`flex min-h-[64px] items-center justify-center gap-2 rounded-2xl border text-base font-semibold transition active:scale-[0.98] ${
+                active
+                  ? 'text-white shadow-sm'
+                  : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
+              }`}
+            >
+              {o.icon}
+              {o.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function CheckSquare({ checked }: { checked: boolean }) {
+  return (
+    <span
+      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition ${
+        checked ? 'border-white bg-white/25' : 'border-slate-300 dark:border-slate-600'
+      }`}
+    >
+      {checked && (
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      )}
+    </span>
+  )
+}
+
+function CartPlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="9" cy="20" r="1.5" />
+      <circle cx="18" cy="20" r="1.5" />
+      <path d="M2 3h2l2.5 12.5A2 2 0 0 0 8.5 17H18a2 2 0 0 0 2-1.6L21 9H6" />
+      <path d="M14 5h4M16 3v4" />
+    </svg>
+  )
+}
+
+function SparkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18" />
+    </svg>
+  )
+}
+
+function RepeatIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17 2l4 4-4 4" />
+      <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+      <path d="M7 22l-4-4 4-4" />
+      <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+    </svg>
   )
 }
 
