@@ -472,6 +472,17 @@ export default function Clientes() {
           </ChartCard>
 
           <ChartCard
+            title="Con factura vs sin factura"
+            subtitle="De las compras marcadas, cuántas se facturaron y cuántas no."
+          >
+            <BarChart
+              data={dataFactura(filtrados)}
+              unit="comp."
+              emptyHint="Todavía no marcaste si las compras fueron con o sin factura."
+            />
+          </ChartCard>
+
+          <ChartCard
             title="Productos más pedidos"
             subtitle="Categorías que la gente pide (tengamos o no)."
           >
@@ -571,6 +582,13 @@ function dataNuevoHabitual(registros: Registro[]): BarDatum[] {
   return [
     { label: 'Nuevos', value: nuevos, color: '#0284c7' },
     { label: 'Habituales', value: habituales, color: '#7c3aed' },
+  ]
+}
+
+function dataFactura(registros: Registro[]): BarDatum[] {
+  return [
+    { label: 'Con factura', value: registros.filter((r) => r.factura === true).length, color: '#059669' },
+    { label: 'Sin factura', value: registros.filter((r) => r.factura === false).length, color: '#64748b' },
   ]
 }
 
