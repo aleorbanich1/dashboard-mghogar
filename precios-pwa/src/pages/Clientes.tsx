@@ -1,10 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  VISIT_TYPES,
-  TONE_COLOR,
-  CUSTOM_VISIT_COLOR,
-  EMPLEADO_COLOR,
-} from '../data/clientes'
+import { VISIT_TYPES, TONE_COLOR, CUSTOM_VISIT_COLOR, EMPLEADO_COLOR } from '../data/clientes'
 import {
   loadRegistros,
   addRegistro,
@@ -85,7 +80,7 @@ export default function Clientes() {
       })),
       ...customTypes.map((n) => ({ value: n, label: n, color: CUSTOM_VISIT_COLOR })),
     ],
-    [customTypes],
+    [customTypes]
   )
 
   async function registrar() {
@@ -160,7 +155,7 @@ export default function Clientes() {
             Clientes
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Registrá cada persona que entra. Misma opción para todos: así los números cierran.
+            Registrá cada persona que entra.
           </p>
         </header>
 
@@ -402,21 +397,16 @@ export default function Clientes() {
             <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-50">
               Estadísticas
             </h2>
-            <RangoFechas
-              desde={desde}
-              hasta={hasta}
-              onDesde={setDesde}
-              onHasta={setHasta}
-            />
+            <RangoFechas desde={desde} hasta={hasta} onDesde={setDesde} onHasta={setHasta} />
           </div>
 
           <Resumen registros={filtrados} />
 
-          <ChartCard title="Embudo de visitas">
+          <ChartCard title="Tipo de visitas">
             <BarChart
               data={dataVisitas(filtrados, visitOptions)}
               unit="pers."
-              emptyHint="Registrá visitas para ver el embudo."
+              emptyHint="Todavia no vino nadie, si alguien vino: registrá."
             />
           </ChartCard>
 
@@ -438,7 +428,7 @@ export default function Clientes() {
             <BarChart
               data={dataPorEmpleado(
                 filtrados.filter((r) => r.visit === 'pregunto_compro'),
-                empleados,
+                empleados
               )}
               unit="vent."
               emptyHint="Todavía no hay ventas registradas."
@@ -452,7 +442,7 @@ export default function Clientes() {
             <BarChart
               data={dataPorEmpleado(
                 filtrados.filter((r) => r.ventaAdicional),
-                empleados,
+                empleados
               )}
               unit="adic."
               emptyHint="Todavía no marcaste ventas adicionales."
@@ -483,12 +473,12 @@ export default function Clientes() {
 
           <ChartCard
             title="Productos más pedidos"
-            subtitle="Categorías que la gente pide y no tenés en stock."
+            subtitle="Categorías que la gente pide (tengamos o no)."
           >
             <BarChart
               data={dataDemanda(filtrados)}
               unit="ped."
-              emptyHint="Nadie pidió productos sin stock todavía."
+              emptyHint="Todavia no vino nadie al local"
             />
           </ChartCard>
         </section>
@@ -672,7 +662,7 @@ function Resumen({ registros }: { registros: Registro[] }) {
   const adicionales = registros.filter((r) => r.ventaAdicional).length
   // Venta adicional sobre la gente que compró.
   const adicEnCompra = registros.filter(
-    (r) => r.visit === 'pregunto_compro' && r.ventaAdicional,
+    (r) => r.visit === 'pregunto_compro' && r.ventaAdicional
   ).length
   const pctAdic = compraron > 0 ? Math.round((adicEnCompra / compraron) * 100) : 0
 
@@ -682,12 +672,7 @@ function Resumen({ registros }: { registros: Registro[] }) {
       <Stat label="Compraron" value={compraron} accent />
       <Stat label="Conversión" value={`${conversion}%`} accent />
       <Stat label="Ventas adic." value={adicionales} accent />
-      <Stat
-        label="Venta adicional sobre compras"
-        value={`${pctAdic}%`}
-        accent
-        wide
-      />
+      <Stat label="Venta adicional sobre compras" value={`${pctAdic}%`} accent wide />
     </div>
   )
 }
@@ -741,15 +726,7 @@ function ChartCard({
   )
 }
 
-function SectionTitle({
-  paso,
-  title,
-  hint,
-}: {
-  paso: string
-  title: string
-  hint?: string
-}) {
+function SectionTitle({ paso, title, hint }: { paso: string; title: string; hint?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
       <div className="flex items-center gap-2">
@@ -881,9 +858,7 @@ function DualChoice({
     <div className={`flex flex-col gap-2 ${enabled ? '' : 'opacity-70'}`}>
       <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
         {label}
-        {hint && (
-          <span className="font-normal text-slate-400 dark:text-slate-500"> {hint}</span>
-        )}
+        {hint && <span className="font-normal text-slate-400 dark:text-slate-500"> {hint}</span>}
       </span>
       <div className="grid grid-cols-2 gap-3">
         {options.map((o) => {
@@ -922,7 +897,17 @@ function CheckSquare({ checked }: { checked: boolean }) {
       }`}
     >
       {checked && (
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
           <path d="M20 6 9 17l-5-5" />
         </svg>
       )}
@@ -932,7 +917,17 @@ function CheckSquare({ checked }: { checked: boolean }) {
 
 function CartPlusIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="24"
+      height="24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <circle cx="9" cy="20" r="1.5" />
       <circle cx="18" cy="20" r="1.5" />
       <path d="M2 3h2l2.5 12.5A2 2 0 0 0 8.5 17H18a2 2 0 0 0 2-1.6L21 9H6" />
@@ -943,7 +938,17 @@ function CartPlusIcon() {
 
 function SparkIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18" />
     </svg>
   )
@@ -951,7 +956,17 @@ function SparkIcon() {
 
 function RepeatIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M17 2l4 4-4 4" />
       <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
       <path d="M7 22l-4-4 4-4" />
@@ -962,7 +977,17 @@ function RepeatIcon() {
 
 function ReceiptIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5 4 2Z" />
       <path d="M8 7h8M8 11h8M8 15h5" />
     </svg>
@@ -971,7 +996,17 @@ function ReceiptIcon() {
 
 function BanIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <circle cx="12" cy="12" r="9" />
       <path d="m5.6 5.6 12.8 12.8" />
     </svg>
@@ -980,7 +1015,17 @@ function BanIcon() {
 
 function ThumbsUpIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="22"
+      height="22"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M7 10v11" />
       <path d="M7 10 11 3a2 2 0 0 1 2.7 1.8V9h5a2 2 0 0 1 2 2.3l-1.3 7A2 2 0 0 1 18.4 20H7" />
     </svg>
@@ -989,7 +1034,17 @@ function ThumbsUpIcon() {
 
 function ShareIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="22"
+      height="22"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <circle cx="18" cy="5" r="2.5" />
       <circle cx="6" cy="12" r="2.5" />
       <circle cx="18" cy="19" r="2.5" />
@@ -1000,7 +1055,17 @@ function ShareIcon() {
 
 function TrashIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
     </svg>
   )
@@ -1037,7 +1102,18 @@ function VisitButton({
 
 function CheckIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+    <svg
+      viewBox="0 0 24 24"
+      width="22"
+      height="22"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0"
+    >
       <path d="M20 6 9 17l-5-5" />
     </svg>
   )
