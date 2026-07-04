@@ -18,6 +18,9 @@ export interface Registro {
   ventaAdicional: boolean // se llevó algo más (solo si compró)
   esHabitual: boolean | null // true = habitual, false = nuevo, null = sin especificar
   factura: boolean | null // true = con factura, false = sin factura, null = sin especificar
+  recomendacion: boolean // vino por recomendación
+  redes: boolean // vino por redes sociales
+  volvio: boolean // había venido antes y volvió
 }
 
 // Fila tal como vuelve de Supabase.
@@ -30,6 +33,9 @@ interface RegistroRow {
   venta_adicional: boolean
   es_habitual: boolean | null
   factura: boolean | null
+  recomendacion: boolean
+  redes: boolean
+  volvio: boolean
 }
 
 function mapRow(row: RegistroRow): Registro {
@@ -42,6 +48,9 @@ function mapRow(row: RegistroRow): Registro {
     ventaAdicional: row.venta_adicional ?? false,
     esHabitual: row.es_habitual ?? null,
     factura: row.factura ?? null,
+    recomendacion: row.recomendacion ?? false,
+    redes: row.redes ?? false,
+    volvio: row.volvio ?? false,
   }
 }
 
@@ -49,7 +58,9 @@ function mapRow(row: RegistroRow): Registro {
 export async function loadRegistros(): Promise<Registro[]> {
   const { data, error } = await supabase
     .from('registros')
-    .select('id, created_at, visit, demand, user_id, venta_adicional, es_habitual, factura')
+    .select(
+      'id, created_at, visit, demand, user_id, venta_adicional, es_habitual, factura, recomendacion, redes, volvio',
+    )
     .order('created_at', { ascending: true })
 
   if (error) {
@@ -67,6 +78,9 @@ export async function addRegistro(input: {
   ventaAdicional: boolean
   esHabitual: boolean | null
   factura: boolean | null
+  recomendacion: boolean
+  redes: boolean
+  volvio: boolean
 }): Promise<Registro[]> {
   const { error } = await supabase.from('registros').insert({
     visit: input.visit,
@@ -75,6 +89,9 @@ export async function addRegistro(input: {
     venta_adicional: input.ventaAdicional,
     es_habitual: input.esHabitual,
     factura: input.factura,
+    recomendacion: input.recomendacion,
+    redes: input.redes,
+    volvio: input.volvio,
   })
 
   if (error) {
@@ -169,6 +186,20 @@ export async function addCategory(raw: string): Promise<string[]> {
   // 23505 = unique_violation: la categoría ya existía, no es un error real.
   if (error && error.code !== '23505') {
     console.error('Error agregando categoría:', error.message)
+    throw new Error(error.message)
+  }
+  return loadAllCategories()
+}
+
+/** Borra una categoría del catálogo y devuelve el catálogo actualizado. */
+export async function deleteCategory(nombre: string): Promise<string[]> {
+  const { error } = await supabase
+    .from('categorias_producto')
+    .delete()
+    .eq('nombre', nombre)
+
+  if (error) {
+    console.error('Error borrando categoría:', error.message)
     throw new Error(error.message)
   }
   return loadAllCategories()

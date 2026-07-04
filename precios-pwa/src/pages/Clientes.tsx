@@ -10,6 +10,7 @@ import {
   addRegistro,
   loadAllCategories,
   addCategory,
+  deleteCategory,
   loadEmpleados,
   loadCustomVisitTypes,
   addVisitType,
@@ -55,9 +56,14 @@ export default function Clientes() {
   const [ventaAdicional, setVentaAdicional] = useState(false)
   const [esHabitual, setEsHabitual] = useState<boolean | null>(null)
   const [factura, setFactura] = useState<boolean | null>(null)
+  const [recomendacion, setRecomendacion] = useState(false)
+  const [redes, setRedes] = useState(false)
+  const [volvio, setVolvio] = useState(false)
   const [nuevaCat, setNuevaCat] = useState('')
   const [nuevoTipo, setNuevoTipo] = useState('')
   const [guardado, setGuardado] = useState(false)
+  // Categoría pendiente de confirmar borrado (modal in-app).
+  const [catABorrar, setCatABorrar] = useState<string | null>(null)
 
   // Rango de fechas para las estadísticas.
   const [desde, setDesde] = useState<string>(lunesDeEstaSemana())
@@ -91,6 +97,9 @@ export default function Clientes() {
       ventaAdicional,
       esHabitual,
       factura,
+      recomendacion,
+      redes,
+      volvio,
     })
     setRegistros(next)
     setVisit(null)
@@ -98,6 +107,9 @@ export default function Clientes() {
     setVentaAdicional(false)
     setEsHabitual(null)
     setFactura(null)
+    setRecomendacion(false)
+    setRedes(false)
+    setVolvio(false)
     setGuardado(true)
     window.setTimeout(() => setGuardado(false), 2200)
   }
@@ -110,6 +122,15 @@ export default function Clientes() {
     setNuevaCat('')
     // Deja seleccionada la recién creada para registrarla al toque.
     setDemand(next.find((c) => c.toLowerCase() === name.toLowerCase()) ?? null)
+  }
+
+  async function confirmarBorrado() {
+    const nombre = catABorrar
+    if (!nombre) return
+    const next = await deleteCategory(nombre)
+    setCategorias(next)
+    if (demand === nombre) setDemand(null)
+    setCatABorrar(null)
   }
 
   async function agregarTipo() {
@@ -191,6 +212,26 @@ export default function Clientes() {
             ]}
           />
 
+          {/* Cómo llegó el cliente */}
+          <CheckCard
+            label="Vino por recomendación"
+            icon={<ThumbsUpIcon />}
+            checked={recomendacion}
+            onToggle={() => setRecomendacion((v) => !v)}
+          />
+          <CheckCard
+            label="Vino por redes sociales"
+            icon={<ShareIcon />}
+            checked={redes}
+            onToggle={() => setRedes((v) => !v)}
+          />
+          <CheckCard
+            label="Volvió (ya había venido antes)"
+            icon={<RepeatIcon />}
+            checked={volvio}
+            onToggle={() => setVolvio((v) => !v)}
+          />
+
           {/* Caja para sumar tipos de cliente al catálogo único */}
           <div className="mt-2 flex flex-col gap-2">
             <label
@@ -262,19 +303,37 @@ export default function Clientes() {
             {categorias.map((c) => {
               const active = demand === c
               return (
-                <button
-                  key={c}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setDemand(active ? null : c)}
-                  className={`flex min-h-[60px] items-center justify-center rounded-2xl border px-3 text-center text-base font-semibold transition active:scale-[0.98] ${
-                    active
-                      ? 'border-sky-600 bg-sky-600 text-white dark:border-sky-500 dark:bg-sky-500 dark:text-slate-950'
-                      : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
-                  }`}
-                >
-                  {c}
-                </button>
+                <div key={c} className="relative">
+                  <button
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setDemand(active ? null : c)}
+                    className={`flex min-h-[60px] w-full items-center justify-center rounded-2xl border px-3 pt-3 pb-1 text-center text-base font-semibold transition active:scale-[0.98] ${
+                      active
+                        ? 'border-sky-600 bg-sky-600 text-white dark:border-sky-500 dark:bg-sky-500 dark:text-slate-950'
+                        : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
+                    }`}
+                  >
+                    {c}
+                  </button>
+                  {/* Tacho en la esquina: hit-area propia + stopPropagation para no
+                      seleccionar la categoría al borrarla. */}
+                  <button
+                    type="button"
+                    aria-label={`Borrar ${c}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setCatABorrar(c)
+                    }}
+                    className={`absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-lg transition active:scale-90 ${
+                      active
+                        ? 'text-white/80 hover:bg-white/20'
+                        : 'text-slate-300 hover:bg-slate-100 hover:text-red-500 dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-red-400'
+                    }`}
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
               )
             })}
           </div>
@@ -412,6 +471,17 @@ export default function Clientes() {
           </ChartCard>
 
           <ChartCard
+            title="Cómo llegó el cliente"
+            subtitle="Recomendación, redes sociales o clientes que volvieron."
+          >
+            <BarChart
+              data={dataOrigen(filtrados)}
+              unit="pers."
+              emptyHint="Todavía no marcaste cómo llegaron los clientes."
+            />
+          </ChartCard>
+
+          <ChartCard
             title="Productos más pedidos"
             subtitle="Categorías que la gente pide y no tenés en stock."
           >
@@ -423,7 +493,64 @@ export default function Clientes() {
           </ChartCard>
         </section>
       </div>
+
+      {catABorrar && (
+        <ConfirmDialog
+          mensaje={`¿Borrar "${catABorrar}" de la lista de productos?`}
+          onCancel={() => setCatABorrar(null)}
+          onConfirm={confirmarBorrado}
+        />
+      )}
     </main>
+  )
+}
+
+function ConfirmDialog({
+  mensaje,
+  onCancel,
+  onConfirm,
+}: {
+  mensaje: string
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-6">
+      <button
+        type="button"
+        aria-label="Cancelar"
+        onClick={onCancel}
+        className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
+      />
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        className="relative flex w-full max-w-xs flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+      >
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400">
+            <TrashIcon />
+          </span>
+          <p className="pt-1 text-base font-medium text-slate-800 dark:text-slate-100">{mensaje}</p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="min-h-[48px] flex-1 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 transition active:scale-[0.98] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="min-h-[48px] flex-1 rounded-xl bg-red-600 text-sm font-bold text-white transition active:scale-[0.98] dark:bg-red-500"
+          >
+            Borrar
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -454,6 +581,18 @@ function dataNuevoHabitual(registros: Registro[]): BarDatum[] {
   return [
     { label: 'Nuevos', value: nuevos, color: '#0284c7' },
     { label: 'Habituales', value: habituales, color: '#7c3aed' },
+  ]
+}
+
+function dataOrigen(registros: Registro[]): BarDatum[] {
+  return [
+    {
+      label: 'Recomendación',
+      value: registros.filter((r) => r.recomendacion).length,
+      color: '#0d9488',
+    },
+    { label: 'Redes sociales', value: registros.filter((r) => r.redes).length, color: '#7c3aed' },
+    { label: 'Volvió', value: registros.filter((r) => r.volvio).length, color: '#d97706' },
   ]
 }
 
@@ -685,6 +824,44 @@ function VentaAdicionalCheck({
   )
 }
 
+function CheckCard({
+  label,
+  icon,
+  checked,
+  onToggle,
+}: {
+  label: string
+  icon: React.ReactNode
+  checked: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      onClick={onToggle}
+      className={`flex min-h-[64px] w-full items-center gap-3 rounded-2xl border px-4 text-left transition active:scale-[0.98] ${
+        checked
+          ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm dark:border-emerald-500 dark:bg-emerald-500 dark:text-slate-950'
+          : 'border-slate-200 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
+      }`}
+    >
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+          checked
+            ? 'bg-white/20 text-white dark:text-slate-950'
+            : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+        }`}
+      >
+        {icon}
+      </span>
+      <span className="flex-1 text-base font-semibold">{label}</span>
+      <CheckSquare checked={checked} />
+    </button>
+  )
+}
+
 function DualChoice({
   label,
   hint,
@@ -797,6 +974,34 @@ function BanIcon() {
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="12" cy="12" r="9" />
       <path d="m5.6 5.6 12.8 12.8" />
+    </svg>
+  )
+}
+
+function ThumbsUpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M7 10v11" />
+      <path d="M7 10 11 3a2 2 0 0 1 2.7 1.8V9h5a2 2 0 0 1 2 2.3l-1.3 7A2 2 0 0 1 18.4 20H7" />
+    </svg>
+  )
+}
+
+function ShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="18" cy="5" r="2.5" />
+      <circle cx="6" cy="12" r="2.5" />
+      <circle cx="18" cy="19" r="2.5" />
+      <path d="M8.2 10.8 15.8 6.2M8.2 13.2l7.6 4.6" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
     </svg>
   )
 }

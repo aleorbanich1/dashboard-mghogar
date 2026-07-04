@@ -3,8 +3,8 @@ import { supabase } from '../lib/supabase'
 import { setLocalSession } from '../lib/auth'
 
 export default function Login() {
-  const [usuario, setUsuario] = useState('')
-  const [password, setPassword] = useState('')
+  const [usuario, setUsuario] = useState('admin')
+  const [password, setPassword] = useState('admin')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

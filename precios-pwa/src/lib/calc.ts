@@ -9,6 +9,8 @@ interface Regla {
   haberes?: boolean
   /** Cantidad de cuotas fijas de la condición (ej. "Lista 9 cuotas"). */
   cuotas?: number
+  /** Nota/aclaración que se muestra en el selector (ej. cuándo aplicar el descuento). */
+  note?: string
 }
 
 export interface CalcInput {

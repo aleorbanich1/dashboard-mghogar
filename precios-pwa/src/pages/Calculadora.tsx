@@ -59,6 +59,16 @@ export default function Calculadora() {
     [condicionId],
   )
 
+  // Si la condición elegida ya no corresponde al precio cargado (ej. era de
+  // contado y se borró ese precio), se deselecciona para no quedar inconsistente.
+  useEffect(() => {
+    if (!condicionId) return
+    const r = rules.find((x) => x.id === condicionId)
+    if (!r) return
+    const okBase = r.base === 'lista' ? precioLista !== null : precioContado !== null
+    if (!okBase) setCondicionId('')
+  }, [condicionId, precioLista, precioContado])
+
   const result = useMemo(
     () =>
       calcularPrecio({
@@ -116,7 +126,15 @@ export default function Calculadora() {
           <CondicionSelect
             value={condicionId}
             onChange={setCondicionId}
-            options={rules.map((r) => ({ id: r.id, label: r.label, ...condColor(r) }))}
+            options={rules.map((r) => ({
+              id: r.id,
+              label: r.label,
+              base: r.base as 'lista' | 'contado',
+              note: (r as { note?: string }).note,
+              ...condColor(r),
+            }))}
+            hasLista={precioLista !== null}
+            hasContado={precioContado !== null}
           />
 
           <HaberesPanel
@@ -158,7 +176,14 @@ export default function Calculadora() {
   )
 }
 
-type Opcion = { id: string; label: string; bg: string; fg: string }
+type Opcion = {
+  id: string
+  label: string
+  base: 'lista' | 'contado'
+  note?: string
+  bg: string
+  fg: string
+}
 
 // Color por categoría de condición. Prioridad: haberes > contado > lista.
 function condColor(r: { base: string; haberes?: boolean }): { bg: string; fg: string } {
@@ -171,10 +196,14 @@ function CondicionSelect({
   value,
   onChange,
   options,
+  hasLista,
+  hasContado,
 }: {
   value: string
   onChange: (id: string) => void
   options: Opcion[]
+  hasLista: boolean
+  hasContado: boolean
 }) {
   const [open, setOpen] = useState(false)
   // mounted controla el render; visible dispara la transición de entrada/salida.
@@ -183,6 +212,22 @@ function CondicionSelect({
   const triggerRef = useRef<HTMLButtonElement>(null)
 
   const seleccion = options.find((o) => o.id === value)
+
+  // Sin precio: no se muestran opciones, solo un cartel. Con un solo precio, solo
+  // las opciones de esa base. Con los dos, agrupadas (Lista aparte de Contado).
+  const sinPrecio = !hasLista && !hasContado
+  const opcLista = options.filter((o) => o.base === 'lista')
+  const opcContado = options.filter((o) => o.base === 'contado')
+  const grupos: { titulo?: string; items: Opcion[] }[] = sinPrecio
+    ? []
+    : hasLista && hasContado
+      ? [
+          { titulo: 'Lista', items: opcLista },
+          { titulo: 'Contado', items: opcContado },
+        ]
+      : hasLista
+        ? [{ items: opcLista }]
+        : [{ items: opcContado }]
 
   // Abrir: montar, luego en el siguiente frame activar visible para animar.
   useEffect(() => {
@@ -271,29 +316,52 @@ function CondicionSelect({
               </p>
             </div>
             {/* Solo la lista scrollea; barra oculta y forma intacta. */}
-            <ul className="flex flex-col gap-2 overflow-y-auto px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {options.map((o) => {
-                const active = o.id === value
-                return (
-                  <li key={o.id}>
-                    <button
-                      id={`opt-${o.id}`}
-                      type="button"
-                      role="option"
-                      aria-selected={active}
-                      onClick={() => elegir(o.id)}
-                      style={{ backgroundColor: o.bg, color: o.fg }}
-                      className={`flex min-h-[52px] w-full items-center justify-between gap-3 rounded-xl px-4 text-left text-base font-medium shadow-sm transition active:scale-[0.99] ${
-                        active ? 'ring-2 ring-slate-900/50 dark:ring-white/70' : ''
-                      }`}
-                    >
-                      <span>{o.label}</span>
-                      {active && <CheckIcon className="shrink-0" />}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            {sinPrecio ? (
+              <div className="px-3 pb-6 pt-3">
+                <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-base font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-400">
+                  Coloca un precio de lista o de contado.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 overflow-y-auto px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {grupos.map((g, gi) => (
+                  <div key={g.titulo ?? gi} className="flex flex-col gap-2">
+                    {g.titulo && (
+                      <p className="px-2 pt-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                        {g.titulo}
+                      </p>
+                    )}
+                    {g.items.map((o) => {
+                      const active = o.id === value
+                      return (
+                        <button
+                          key={o.id}
+                          id={`opt-${o.id}`}
+                          type="button"
+                          role="option"
+                          aria-selected={active}
+                          onClick={() => elegir(o.id)}
+                          style={{ backgroundColor: o.bg, color: o.fg }}
+                          className={`flex min-h-[52px] w-full flex-col items-start justify-center gap-0.5 rounded-xl px-4 py-2 text-left text-base font-medium shadow-sm transition active:scale-[0.99] ${
+                            active ? 'ring-2 ring-slate-900/50 dark:ring-white/70' : ''
+                          }`}
+                        >
+                          <span className="flex w-full items-center justify-between gap-3">
+                            <span>{o.label}</span>
+                            {active && <CheckIcon className="shrink-0" />}
+                          </span>
+                          {o.note && (
+                            <span className="text-xs font-semibold leading-snug opacity-80">
+                              {o.note}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

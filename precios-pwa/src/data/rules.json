@@ -8,9 +8,9 @@
   { "id": "r07", "label": "Lista transferencia 60+ días",  "base": "lista",    "factor": 1.0  },
   { "id": "r08", "label": "Lista cheque 60 días",          "base": "lista",    "factor": 1.0  },
   { "id": "r09", "label": "Lista cheque 90 días",          "base": "lista",    "factor": 1.0  },
-  { "id": "r10", "label": "Contado efectivo con factura",  "base": "contado", "factor": 0.95 },
-  { "id": "r11", "label": "Contado efectivo sin factura",  "base": "contado", "factor": 0.9  },
+  { "id": "r11", "label": "Contado efectivo sin factura",  "base": "contado", "factor": 0.95, "note": "SOLO SI EL CLIENTE SE PONE PESADO SE LE HACE ESTE DESCUENTO SOLO CON EFECTIVO (NO TRANSFERENCIA)" },
   { "id": "r12", "label": "Contado transferencia 7 días",  "base": "contado", "factor": 1.0  },
   { "id": "r13", "label": "Contado tarjeta débito",        "base": "contado", "factor": 1.0  },
-  { "id": "r14", "label": "Contado cheque 30 días",        "base": "contado", "factor": 1.0  }
+  { "id": "r14", "label": "Contado cheque 30 días",        "base": "contado", "factor": 1.0  },
+  { "id": "r15", "label": "Contado efectivo transferencia","base": "contado", "factor": 1.0  }
 ]
