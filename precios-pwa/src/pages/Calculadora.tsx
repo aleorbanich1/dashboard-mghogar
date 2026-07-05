@@ -20,7 +20,10 @@ function sanitizeMoney(raw: string): string {
 }
 
 function parseMoney(raw: string): number | null {
-  const clean = raw.replace(/[^\d.,]/g, '').replace(/\./g, '').replace(',', '.')
+  const clean = raw
+    .replace(/[^\d.,]/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.')
   if (clean === '') return null
   const n = Number(clean)
   return Number.isFinite(n) ? n : null
@@ -56,7 +59,7 @@ export default function Calculadora() {
 
   const esHaberes = useMemo(
     () => rules.find((r) => r.id === condicionId)?.haberes === true,
-    [condicionId],
+    [condicionId]
   )
 
   // Si la condición elegida ya no corresponde al precio cargado (ej. era de
@@ -80,7 +83,16 @@ export default function Calculadora() {
         tasaMensualSindicato: esHaberes && tasaPct !== null ? tasaPct / 100 : null,
         cantidadCuotas: esHaberes ? cuotas : null,
       }),
-    [precioLista, precioContado, condicionId, clienteEspecial, masDeCinco, esHaberes, tasaPct, cuotas],
+    [
+      precioLista,
+      precioContado,
+      condicionId,
+      clienteEspecial,
+      masDeCinco,
+      esHaberes,
+      tasaPct,
+      cuotas,
+    ]
   )
 
   function reset() {
@@ -151,11 +163,7 @@ export default function Calculadora() {
             checked={clienteEspecial}
             onChange={setClienteEspecial}
           />
-          <Toggle
-            label="Más de 5 artículos"
-            checked={masDeCinco}
-            onChange={setMasDeCinco}
-          />
+          <Toggle label="Más de 5 artículos" checked={masDeCinco} onChange={setMasDeCinco} />
         </div>
 
         <Resultado result={result} />
@@ -402,7 +410,9 @@ function MoneyField({
         />
       </div>
       {parsed !== null && (
-        <span className="text-xs tabular-nums text-slate-400 dark:text-slate-500">{pesos.format(parsed)}</span>
+        <span className="text-xs tabular-nums text-slate-400 dark:text-slate-500">
+          {pesos.format(parsed)}
+        </span>
       )}
     </div>
   )
@@ -437,7 +447,10 @@ function HaberesPanel({
           </p>
 
           <div className="flex flex-col gap-2">
-            <label htmlFor="tasa-sindicato" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            <label
+              htmlFor="tasa-sindicato"
+              className="text-sm font-medium text-slate-700 dark:text-slate-300"
+            >
               Tasa mensual del sindicato
             </label>
             <div className="relative">
@@ -463,7 +476,9 @@ function HaberesPanel({
           </div>
 
           <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Cantidad de cuotas</span>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Cantidad de cuotas
+            </span>
             <div className="flex flex-wrap gap-2">
               {CUOTAS_RAPIDAS.map((n) => {
                 const active = cuotas === n
@@ -562,7 +577,9 @@ function Resultado({ result }: { result: ReturnType<typeof calcularPrecio> }) {
   if (result.tipo === 'ale') {
     return (
       <div className="mt-8 rounded-2xl border-t-4 border-red-600 bg-red-50 px-6 py-10 text-center dark:border-red-500 dark:bg-red-500/10">
-        <p className="text-3xl font-extrabold tracking-tight text-red-700 dark:text-red-400">PREGUNTAR A ALE</p>
+        <p className="text-3xl font-extrabold tracking-tight text-red-700 dark:text-red-400">
+          PREGUNTAR A ALE
+        </p>
       </div>
     )
   }
@@ -578,7 +595,9 @@ function Resultado({ result }: { result: ReturnType<typeof calcularPrecio> }) {
   if (result.tipo === 'falta_precio') {
     return (
       <div className="mt-8 px-2 py-10 text-center">
-        <p className="text-base text-slate-400 dark:text-slate-500">Cargá el precio de {baseLabel[result.cual]}</p>
+        <p className="text-base text-slate-400 dark:text-slate-500">
+          Cargá el precio de {baseLabel[result.cual]}
+        </p>
       </div>
     )
   }
@@ -633,7 +652,10 @@ function Resultado({ result }: { result: ReturnType<typeof calcularPrecio> }) {
             calc={`${tasaPct}% × ${result.cuotas} cuotas = ${interesPct}%`}
           />
           <Formula label="Tasa mensual" calc={`${tasaPct}% que retiene el sindicato`} />
-          <Formula label="Factor aplicado" calc={`1 + ${interesPct}% = ${factorNum} (${factorPct})`} />
+          <Formula
+            label="Factor aplicado"
+            calc={`1 + ${interesPct}% = ${factorNum} (${factorPct})`}
+          />
         </div>
       </div>
     )
@@ -674,10 +696,20 @@ interface DatosPago {
 function datosPago(result: OkResult): DatosPago {
   const total = result.precio
   if ('cuotas' in result) {
-    return { modalidad: result.regla, cuotas: result.cuotas, porCuota: result.precioPorCuota, total }
+    return {
+      modalidad: result.regla,
+      cuotas: result.cuotas,
+      porCuota: result.precioPorCuota,
+      total,
+    }
   }
   if (result.cuotasFijas && result.precioPorCuota !== undefined) {
-    return { modalidad: result.regla, cuotas: result.cuotasFijas, porCuota: result.precioPorCuota, total }
+    return {
+      modalidad: result.regla,
+      cuotas: result.cuotasFijas,
+      porCuota: result.precioPorCuota,
+      total,
+    }
   }
   return { modalidad: result.regla, total }
 }
@@ -805,7 +837,17 @@ function PdfPresupuesto({
 
 function PdfIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
       <path d="M14 2v6h6" />
       <path d="M9 15h6M9 18h4" />
@@ -828,7 +870,9 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
       <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
       <dd
         className={`tabular-nums ${
-          strong ? 'text-lg font-bold text-slate-900 dark:text-slate-50' : 'font-medium text-slate-700 dark:text-slate-300'
+          strong
+            ? 'text-lg font-bold text-slate-900 dark:text-slate-50'
+            : 'font-medium text-slate-700 dark:text-slate-300'
         }`}
       >
         {value}
@@ -840,7 +884,18 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
 /* Íconos inline (sin dependencias, sin emojis), trazo 1.5 consistente. */
 function ChevronDownIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="m6 9 6 6 6-6" />
     </svg>
   )
@@ -848,7 +903,18 @@ function ChevronDownIcon({ className }: { className?: string }) {
 
 function CheckIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M20 6 9 17l-5-5" />
     </svg>
   )
