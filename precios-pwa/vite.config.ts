@@ -12,8 +12,18 @@ export default defineConfig({
   // Puerto fijo para que el origin (localhost:4173) no cambie entre
   // ejecuciones → la sesion de Supabase guardada en localStorage persiste y
   // solo hay que iniciar sesion una vez.
-  preview: { port: 4173, strictPort: true, host: '127.0.0.1' },
-  server: { port: 4173, strictPort: true, host: '127.0.0.1' },
+  preview: {
+    port: 4173,
+    strictPort: true,
+    host: '127.0.0.1',
+    allowedHosts: ['.ngrok-free.dev'], // Permite túneles de ngrok en preview
+  },
+  server: {
+    port: 4173,
+    strictPort: true,
+    host: '127.0.0.1',
+    allowedHosts: ['.ngrok-free.dev'], // Permite túneles de ngrok en dev
+  },
   plugins: [
     tailwindcss(),
     react(),

@@ -10,24 +10,40 @@ const BASE_INPUT = {
 }
 
 describe('calcularPrecio', () => {
-  it('caso ok lista — r01 factor 1.0', () => {
+  it('caso ok lista — r01 factor 1.0 (12 cuotas)', () => {
     const result = calcularPrecio({ ...BASE_INPUT, condicionId: 'r01' })
-    expect(result).toEqual({ tipo: 'ok', precio: 1000, regla: 'Lista 12 cuotas sin interés', base: 'lista', factor: 1.0 })
+    expect(result).toEqual({
+      tipo: 'ok',
+      precio: 1000,
+      regla: 'Lista 12 cuotas sin interés',
+      base: 'lista',
+      factor: 1.0,
+      cuotasFijas: 12,
+      precioPorCuota: 1000 / 12,
+    })
   })
 
-  it('caso ok lista con descuento — r02 factor 0.95', () => {
+  it('caso ok lista con descuento — r02 factor 0.95 (9 cuotas)', () => {
     const result = calcularPrecio({ ...BASE_INPUT, condicionId: 'r02' })
-    expect(result).toEqual({ tipo: 'ok', precio: 950, regla: 'Lista 9 cuotas', base: 'lista', factor: 0.95 })
+    expect(result).toEqual({
+      tipo: 'ok',
+      precio: 950,
+      regla: 'Lista 9 cuotas',
+      base: 'lista',
+      factor: 0.95,
+      cuotasFijas: 9,
+      precioPorCuota: 950 / 9,
+    })
   })
 
-  it('caso ok contado — r10 factor 0.95', () => {
-    const result = calcularPrecio({ ...BASE_INPUT, condicionId: 'r10' })
-    expect(result).toEqual({ tipo: 'ok', precio: 760, regla: 'Contado efectivo con factura', base: 'contado', factor: 0.95 })
+  it('caso ok contado — r05 factor 1.0', () => {
+    const result = calcularPrecio({ ...BASE_INPUT, condicionId: 'r05' })
+    expect(result).toEqual({ tipo: 'ok', precio: 800, regla: 'Contado tarjeta crédito 1 pago', base: 'contado', factor: 1.0 })
   })
 
-  it('caso ok contado sin factura — r11 factor 0.9', () => {
+  it('caso ok contado sin factura — r11 factor 0.95', () => {
     const result = calcularPrecio({ ...BASE_INPUT, condicionId: 'r11' })
-    expect(result).toEqual({ tipo: 'ok', precio: 720, regla: 'Contado efectivo sin factura', base: 'contado', factor: 0.9 })
+    expect(result).toEqual({ tipo: 'ok', precio: 760, regla: 'Contado efectivo sin factura', base: 'contado', factor: 0.95 })
   })
 
   it('clienteEspecial → ale', () => {
@@ -61,7 +77,7 @@ describe('calcularPrecio', () => {
   })
 
   it('falta precio contado — base contado sin precioContado', () => {
-    const result = calcularPrecio({ ...BASE_INPUT, condicionId: 'r10', precioContado: null })
+    const result = calcularPrecio({ ...BASE_INPUT, condicionId: 'r05', precioContado: null })
     expect(result).toEqual({ tipo: 'falta_precio', cual: 'contado' })
   })
 

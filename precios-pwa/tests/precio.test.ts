@@ -19,17 +19,17 @@ function post(body: unknown, token: string | null = 'secreto-test') {
 
 describe('POST /api/precio', () => {
   it('rechaza sin token → 401', async () => {
-    const r = await post({ condicionId: 'r10', precioContado: 100 }, null)
+    const r = await post({ condicionId: 'r11', precioContado: 100 }, null)
     expect(r.status).toBe(401)
   })
 
   it('rechaza token inválido → 401', async () => {
-    const r = await post({ condicionId: 'r10', precioContado: 100 }, 'malo')
+    const r = await post({ condicionId: 'r11', precioContado: 100 }, 'malo')
     expect(r.status).toBe(401)
   })
 
-  it('efectivo con factura (r10) → 95% del contado', async () => {
-    const r = await post({ condicionId: 'r10', precioContado: 1000 })
+  it('efectivo sin factura (r11) → 95% del contado', async () => {
+    const r = await post({ condicionId: 'r11', precioContado: 1000 })
     const j = await r.json()
     expect(j).toMatchObject({ ok: true, estado: 'ok', precio: 950, factor: 0.95 })
   })
@@ -37,7 +37,7 @@ describe('POST /api/precio', () => {
   it('resuelve por alias "metodo"', async () => {
     const r = await post({ metodo: 'efectivo sin factura', precioContado: 1000 })
     const j = await r.json()
-    expect(j).toMatchObject({ ok: true, precio: 900, condicionId: 'r11' })
+    expect(j).toMatchObject({ ok: true, precio: 950, condicionId: 'r11' })
   })
 
   it('descuento de haberes con tasa en % → cuotas', async () => {
@@ -52,13 +52,13 @@ describe('POST /api/precio', () => {
   })
 
   it('cliente especial → consultar a Ale', async () => {
-    const r = await post({ condicionId: 'r10', precioContado: 1000, clienteEspecial: true })
+    const r = await post({ condicionId: 'r11', precioContado: 1000, clienteEspecial: true })
     const j = await r.json()
     expect(j).toMatchObject({ estado: 'consultar' })
   })
 
   it('falta precio → 422', async () => {
-    const r = await post({ condicionId: 'r10' })
+    const r = await post({ condicionId: 'r11' })
     expect(r.status).toBe(422)
     expect(await r.json()).toMatchObject({ estado: 'falta_precio', cual: 'contado' })
   })

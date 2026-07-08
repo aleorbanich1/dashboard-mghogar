@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import Calculadora from './pages/Calculadora'
 import Clientes from './pages/Clientes'
+import Asistencia from './pages/Asistencia'
 import Login from './pages/Login'
-import TopBar, { type Tab } from './components/TopBar'
+import Sidebar, { type Tab } from './components/Sidebar'
 import { useSession } from './lib/auth'
 
 function App() {
@@ -22,9 +23,11 @@ function App() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950">
-      <TopBar tab={tab} onTab={setTab} />
-      {tab === 'precios' ? <Calculadora /> : <Clientes />}
+    <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 lg:flex">
+      <Sidebar tab={tab} onTab={setTab} />
+      <div className="min-w-0 flex-1">
+        {tab === 'precios' ? <Calculadora /> : tab === 'clientes' ? <Clientes /> : <Asistencia />}
+      </div>
     </div>
   )
 }
