@@ -3,13 +3,30 @@ import {
   parseUdiskLog,
   colapsarDuplicados,
   emparejarDia,
-  sugerirEsperada,
+  sugerirHorario,
+  horarioVacio,
   generarReporte,
   empleadosDe,
   fmtHoras,
   fmtFecha,
   type ConfigReporte,
+  type HorarioEmpleado,
 } from './asistencia'
+
+/** Horario de jornada única (un solo turno). */
+function unico(entrada: string | null, salida: string | null = null): HorarioEmpleado {
+  return { dobleTurno: false, turno1: { entrada, salida }, turno2: { entrada: null, salida: null } }
+}
+
+/** Horario de doble turno (mañana y tarde). */
+function doble(
+  e1: string | null,
+  s1: string | null,
+  e2: string | null,
+  s2: string | null
+): HorarioEmpleado {
+  return { dobleTurno: true, turno1: { entrada: e1, salida: s1 }, turno2: { entrada: e2, salida: s2 } }
+}
 
 // Fragmento real del archivo del reloj (tabs entre campos, nombre con padding).
 const SAMPLE = [
@@ -26,7 +43,7 @@ const SAMPLE = [
 function configBase(over: Partial<ConfigReporte> = {}): ConfigReporte {
   return {
     incluidos: new Set(['3', '4']),
-    esperadas: {},
+    horarios: {},
     toleranciaMin: 10,
     diasLaborables: new Set([1, 2, 3, 4, 5, 6]),
     ventanaDupMin: 10,
@@ -79,45 +96,91 @@ describe('emparejarDia', () => {
     // gabriela 02/05: 08:53–13:00 y 15:55–20:04
     const turnos = emparejarDia([533, 780, 955, 1204])
     expect(turnos).toEqual([
-      { entrada: '08:53', salida: '13:00', minutos: 247 },
-      { entrada: '15:55', salida: '20:04', minutos: 249 },
+      { entrada: '08:53', salida: '13:00', minutos: 247, tardeMin: null, tempranoMin: null },
+      { entrada: '15:55', salida: '20:04', minutos: 249, tardeMin: null, tempranoMin: null },
     ])
   })
 
   it('2 marcas → jornada única', () => {
     const turnos = emparejarDia([760, 996])
-    expect(turnos).toEqual([{ entrada: '12:40', salida: '16:36', minutos: 236 }])
+    expect(turnos).toEqual([
+      { entrada: '12:40', salida: '16:36', minutos: 236, tardeMin: null, tempranoMin: null },
+    ])
   })
 
   it('cantidad impar → el último turno queda sin salida y no suma horas', () => {
     const turnos = emparejarDia([533, 780, 955])
-    expect(turnos[1]).toEqual({ entrada: '15:55', salida: null, minutos: 0 })
+    expect(turnos[1]).toMatchObject({ entrada: '15:55', salida: null, minutos: 0 })
+  })
+
+  it('doble turno: controla la entrada y la salida de CADA turno por separado', () => {
+    // esperado: 09:00–13:00 y 16:00–20:00, tolerancia 10.
+    // real: entra 08:53 (en hora), sale 13:00 (en hora),
+    //       vuelve 16:30 (tarde 30), se va 19:30 (30 antes).
+    const turnos = emparejarDia([533, 780, 990, 1170], doble('09:00', '13:00', '16:00', '20:00'), 10)
+    expect(turnos[0]).toMatchObject({ tardeMin: null, tempranoMin: null })
+    expect(turnos[1]).toMatchObject({ entrada: '16:30', tardeMin: 30, tempranoMin: 30 })
+  })
+
+  it('sin doble turno, el segundo turno NO se controla contra turno2', () => {
+    const turnos = emparejarDia([533, 780, 990, 1170], unico('09:00', '13:00'), 10)
+    expect(turnos[1]).toMatchObject({ tardeMin: null, tempranoMin: null })
+  })
+
+  it('la tolerancia también aplica a la salida anticipada', () => {
+    // sale 12:55 con salida esperada 13:00 y tolerancia 10 → dentro de tolerancia
+    const turnos = emparejarDia([540, 775], unico('09:00', '13:00'), 10)
+    expect(turnos[0].tempranoMin).toBeNull()
   })
 })
 
-describe('sugerirEsperada', () => {
-  it('sugiere la mediana de las primeras marcas redondeada a 15 min', () => {
+describe('sugerirHorario', () => {
+  it('detecta jornada única y toma la ÚLTIMA marca como salida', () => {
     const texto = [
       '000001\t1\t000000010\troxana        \t268435456\t2305\t2026/05/02  12:40:53',
       '000002\t1\t000000010\troxana        \t268435456\t2305\t2026/05/02  16:36:38',
       '000003\t1\t000000010\troxana        \t268435456\t2305\t2026/05/04  12:39:39',
       '000004\t1\t000000010\troxana        \t268435456\t2305\t2026/05/04  16:33:00',
       '000005\t1\t000000010\troxana        \t268435456\t2305\t2026/05/05  12:40:58',
+      '000006\t1\t000000010\troxana        \t268435456\t2305\t2026/05/05  16:38:00',
     ].join('\n')
     const { marcas } = parseUdiskLog(texto)
-    // primeras marcas: 12:40, 12:39, 12:40 → mediana 12:40 → redondeo 12:45
-    expect(sugerirEsperada(marcas, '10')).toBe('12:45')
+    // entradas 12:40/12:39/12:40 → mediana 12:40 → 12:45; salidas ~16:35 → 16:30
+    expect(sugerirHorario(marcas, '10')).toEqual({
+      dobleTurno: false,
+      turno1: { entrada: '12:45', salida: '16:30' },
+      turno2: { entrada: null, salida: null },
+    })
   })
 
-  it('empleado sin marcas → null', () => {
-    expect(sugerirEsperada([], '99')).toBeNull()
+  it('detecta doble turno cuando la mayoría de los días tiene 4 marcas', () => {
+    const texto = [
+      '000001\t1\t000000003\tgabriela ver  \t268435456\t2305\t2026/05/02  09:00:00',
+      '000002\t1\t000000003\tgabriela ver  \t268435456\t2305\t2026/05/02  13:00:00',
+      '000003\t1\t000000003\tgabriela ver  \t268435456\t2305\t2026/05/02  16:00:00',
+      '000004\t1\t000000003\tgabriela ver  \t268435456\t2305\t2026/05/02  20:00:00',
+      '000005\t1\t000000003\tgabriela ver  \t268435456\t2305\t2026/05/04  09:00:00',
+      '000006\t1\t000000003\tgabriela ver  \t268435456\t2305\t2026/05/04  13:00:00',
+      '000007\t1\t000000003\tgabriela ver  \t268435456\t2305\t2026/05/04  16:00:00',
+      '000008\t1\t000000003\tgabriela ver  \t268435456\t2305\t2026/05/04  20:00:00',
+    ].join('\n')
+    const { marcas } = parseUdiskLog(texto)
+    expect(sugerirHorario(marcas, '3')).toEqual({
+      dobleTurno: true,
+      turno1: { entrada: '09:00', salida: '13:00' },
+      turno2: { entrada: '16:00', salida: '20:00' },
+    })
+  })
+
+  it('empleado sin marcas → horario vacío', () => {
+    expect(sugerirHorario([], '99')).toEqual(horarioVacio())
   })
 })
 
 describe('generarReporte', () => {
   it('arma el día con turno partido, horas y sin tardanza dentro de tolerancia', () => {
     const { marcas } = parseUdiskLog(SAMPLE)
-    const rep = generarReporte(marcas, configBase({ esperadas: { '3': '08:50' } }))
+    const rep = generarReporte(marcas, configBase({ horarios: { '3': unico('08:50') } }))
     const gabi = rep.empleados.find((e) => e.enNo === '3')!
     expect(gabi.dias).toHaveLength(1)
     expect(gabi.dias[0].turnos).toHaveLength(2)
@@ -129,17 +192,32 @@ describe('generarReporte', () => {
 
   it('marca tardanza cuando supera esperada + tolerancia', () => {
     const { marcas } = parseUdiskLog(SAMPLE)
-    const rep = generarReporte(marcas, configBase({ esperadas: { '3': '08:30' } }))
+    const rep = generarReporte(marcas, configBase({ horarios: { '3': unico('08:30') } }))
     const gabi = rep.empleados.find((e) => e.enNo === '3')!
     // 08:53 vs 08:30 (+10) → tarde por 23 minutos
     expect(gabi.dias[0].tardeMin).toBe(23)
     expect(gabi.tardanzas).toBe(1)
   })
 
-  it('sin hora esperada no controla tardanzas', () => {
+  it('doble turno: suma los atrasos de los dos turnos y cuenta la salida anticipada', () => {
+    const { marcas } = parseUdiskLog(SAMPLE)
+    // gabriela real: 08:53–13:00 y 15:55–20:04.
+    // esperado: 08:30–13:00 y 15:30–20:30 → tarde 23 + 25 = 48; se fue 26 antes.
+    const rep = generarReporte(
+      marcas,
+      configBase({ horarios: { '3': doble('08:30', '13:00', '15:30', '20:30') } })
+    )
+    const gabi = rep.empleados.find((e) => e.enNo === '3')!
+    expect(gabi.dias[0].tardeMin).toBe(48)
+    expect(gabi.dias[0].tempranoMin).toBe(26)
+    expect(gabi.tardanzas).toBe(1)
+    expect(gabi.salidasTempranas).toBe(1)
+  })
+
+  it('sin horario cargado no controla tardanzas ni salidas', () => {
     const { marcas } = parseUdiskLog(SAMPLE)
     const rep = generarReporte(marcas, configBase())
-    expect(rep.empleados.every((e) => e.tardanzas === 0)).toBe(true)
+    expect(rep.empleados.every((e) => e.tardanzas === 0 && e.salidasTempranas === 0)).toBe(true)
   })
 
   it('ausencias: día laborable con actividad ajena y sin marcas del empleado', () => {

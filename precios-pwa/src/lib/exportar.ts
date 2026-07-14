@@ -13,6 +13,7 @@ import {
   type DiaReporte,
   type Reporte,
 } from './asistencia'
+import { resumen, type Contacto } from './calendarios'
 
 const EMERALD = '#059669'
 const SLATE_900 = '#0f172a'
@@ -29,12 +30,18 @@ function nombreArchivo(rep: Reporte, ext: string): string {
 function obsDe(d: DiaReporte): string {
   const obs: string[] = []
   if (d.tardeMin !== null) obs.push(`Tarde +${d.tardeMin} min`)
+  if (d.tempranoMin !== null) obs.push(`Se fue ${d.tempranoMin} min antes`)
   if (d.incompleto) obs.push('Falta una marca')
   // Turnos extra (más de 2) van como texto para no agrandar la tabla.
   for (const t of d.turnos.slice(2)) {
     obs.push(`Turno extra ${t.entrada}–${t.salida ?? '—'}`)
   }
   return obs.join(' · ')
+}
+
+/** Un día se resalta si tuvo tardanza o salida anticipada. */
+function conAviso(d: DiaReporte): boolean {
+  return d.tardeMin !== null || d.tempranoMin !== null
 }
 
 function filaDia(d: DiaReporte): string[] {
@@ -59,11 +66,23 @@ function filaResumen(e: EmpleadoReporte): string[] {
     String(e.diasTrabajados),
     fmtHoras(e.totalMinutos),
     String(e.tardanzas),
+    String(e.salidasTempranas),
     String(e.ausencias.length),
   ]
 }
 
-const CABECERA_RESUMEN = ['Empleado', 'Días trabajados', 'Horas totales', 'Tardanzas', 'Ausencias']
+const CABECERA_RESUMEN = [
+  'Empleado',
+  'Días trabajados',
+  'Horas totales',
+  'Tardanzas',
+  'Se fue antes',
+  'Ausencias',
+]
+
+function subtituloEmpleado(e: EmpleadoReporte): string {
+  return `${e.diasTrabajados} días · ${fmtHoras(e.totalMinutos)} · ${e.tardanzas} tardanzas · ${e.salidasTempranas} salidas antes · ${e.ausencias.length} ausencias`
+}
 
 function ausenciasTexto(e: EmpleadoReporte): string {
   if (e.ausencias.length === 0) return ''
@@ -154,11 +173,7 @@ export async function exportarPDF(rep: Reporte): Promise<void> {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.setTextColor(SLATE_500)
-    doc.text(
-      `${emp.diasTrabajados} días · ${fmtHoras(emp.totalMinutos)} · ${emp.tardanzas} tardanzas · ${emp.ausencias.length} ausencias`,
-      12,
-      y + 5
-    )
+    doc.text(subtituloEmpleado(emp), 12, y + 5)
 
     autoTable(doc, {
       startY: y + 8,
@@ -170,8 +185,9 @@ export async function exportarPDF(rep: Reporte): Promise<void> {
       columnStyles: { 6: { textColor: '#b45309' } },
       margin: { left: 12, right: 12 },
       didParseCell: (data) => {
-        // Resalta la fila completa cuando hay tardanza
-        if (data.section === 'body' && emp.dias[data.row.index]?.tardeMin !== null) {
+        // Resalta la fila completa cuando hay tardanza o salida anticipada
+        const dia = emp.dias[data.row.index]
+        if (data.section === 'body' && dia && conAviso(dia)) {
           data.cell.styles.fillColor = '#fef3c7'
         }
       },
@@ -198,6 +214,101 @@ export async function exportarPDF(rep: Reporte): Promise<void> {
   }
 
   doc.save(nombreArchivo(rep, 'pdf'))
+}
+
+// ── PDF del calendario de contactos ─────────────────────────────────────────
+
+/**
+ * Reporte de contactos de la cartera para mandarle al jefe. `periodo` describe
+ * el recorte elegido (todo o un rango de fechas) y se imprime en el encabezado.
+ */
+export async function exportarContactosPDF(
+  contactos: Contacto[],
+  periodo: string,
+  archivo: string
+): Promise<void> {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ])
+
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const ancho = doc.internal.pageSize.getWidth()
+  const logo = await logoDataUrl()
+
+  doc.setFillColor(EMERALD)
+  doc.rect(0, 0, ancho, 26, 'F')
+  if (logo) {
+    try {
+      doc.addImage(logo, 'PNG', 12, 5, 16, 16)
+    } catch {
+      /* sin logo, no pasa nada */
+    }
+  }
+  doc.setTextColor('#ffffff')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(15)
+  doc.text('Calendario de contactos', logo ? 32 : 12, 12)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10)
+  doc.text(`MG Hogar — ${periodo}`, logo ? 32 : 12, 19)
+
+  const totales = resumen(contactos)
+  doc.setTextColor(SLATE_900)
+  doc.setFontSize(9)
+  doc.text(
+    `${contactos.length} contactos` +
+      (totales.length > 0
+        ? ` · ${totales.map((t) => `${t.cantidad} ${t.estado.toLowerCase()}`).join(' · ')}`
+        : ''),
+    12,
+    33
+  )
+  doc.setTextColor(SLATE_500)
+  doc.setFontSize(8)
+  doc.text(
+    `Generado el ${new Date().toLocaleDateString('es-AR')} ${new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`,
+    ancho - 12,
+    33,
+    { align: 'right' }
+  )
+
+  autoTable(doc, {
+    startY: 38,
+    head: [['Día', 'Nombre', 'Segmento', 'Estado', 'WhatsApp', 'Notas']],
+    body: contactos.map((c) => [
+      c.dia ? fmtFecha(c.dia) : '—',
+      c.nombre || '—',
+      c.segmento || '—',
+      c.estado || '—',
+      c.wsp || '—',
+      c.notas || '',
+    ]),
+    theme: 'striped',
+    headStyles: { fillColor: EMERALD, fontStyle: 'bold', fontSize: 9 },
+    styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak', valign: 'top' },
+    columnStyles: {
+      0: { cellWidth: 20 },
+      1: { cellWidth: 32 },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 18 },
+      4: { cellWidth: 22 },
+      5: { cellWidth: 'auto' },
+    },
+    margin: { left: 12, right: 12 },
+  })
+
+  const paginas = doc.getNumberOfPages()
+  for (let i = 1; i <= paginas; i++) {
+    doc.setPage(i)
+    doc.setFontSize(8)
+    doc.setTextColor(SLATE_500)
+    doc.text(`Página ${i} de ${paginas}`, ancho / 2, doc.internal.pageSize.getHeight() - 6, {
+      align: 'center',
+    })
+  }
+
+  doc.save(archivo)
 }
 
 // ── DOCX ────────────────────────────────────────────────────────────────────
@@ -272,18 +383,12 @@ export async function exportarDOCX(rep: Reporte): Promise<void> {
       }),
       new Paragraph({
         spacing: { after: 120 },
-        children: [
-          new TextRun({
-            text: `${emp.diasTrabajados} días · ${fmtHoras(emp.totalMinutos)} · ${emp.tardanzas} tardanzas · ${emp.ausencias.length} ausencias`,
-            size: 18,
-            color: '64748B',
-          }),
-        ],
+        children: [new TextRun({ text: subtituloEmpleado(emp), size: 18, color: '64748B' })],
       }),
       tabla(
         CABECERA_DIAS,
         emp.dias.map(filaDia),
-        emp.dias.map((d) => (d.tardeMin !== null ? 'FEF3C7' : undefined))
+        emp.dias.map((d) => (conAviso(d) ? 'FEF3C7' : undefined))
       )
     )
     const aus = ausenciasTexto(emp)

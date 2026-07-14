@@ -9,6 +9,7 @@ import {
   loadEmpleados,
   loadCustomVisitTypes,
   addVisitType,
+  deleteVisitType,
   type Registro,
   type Empleado,
 } from '../lib/registros'
@@ -35,7 +36,12 @@ interface VisitOption {
   value: string
   label: string
   color: string
+  /** Los personalizados (los que cargó el negocio) se pueden borrar; los fijos no. */
+  custom?: boolean
 }
+
+/** Qué está pendiente de confirmar borrado (modal in-app). */
+type Borrable = { clase: 'categoria' | 'tipo'; nombre: string }
 
 export default function Clientes() {
   const [registros, setRegistros] = useState<Registro[]>([])
@@ -57,8 +63,8 @@ export default function Clientes() {
   const [nuevaCat, setNuevaCat] = useState('')
   const [nuevoTipo, setNuevoTipo] = useState('')
   const [guardado, setGuardado] = useState(false)
-  // Categoría pendiente de confirmar borrado (modal in-app).
-  const [catABorrar, setCatABorrar] = useState<string | null>(null)
+  // Categoría o tipo de cliente pendiente de confirmar borrado (modal in-app).
+  const [aBorrar, setABorrar] = useState<Borrable | null>(null)
 
   // Rango de fechas para las estadísticas.
   const [desde, setDesde] = useState<string>(lunesDeEstaSemana())
@@ -78,7 +84,12 @@ export default function Clientes() {
         label: v.label,
         color: TONE_COLOR[v.tone],
       })),
-      ...customTypes.map((n) => ({ value: n, label: n, color: CUSTOM_VISIT_COLOR })),
+      ...customTypes.map((n) => ({
+        value: n,
+        label: n,
+        color: CUSTOM_VISIT_COLOR,
+        custom: true,
+      })),
     ],
     [customTypes]
   )
@@ -120,12 +131,16 @@ export default function Clientes() {
   }
 
   async function confirmarBorrado() {
-    const nombre = catABorrar
-    if (!nombre) return
-    const next = await deleteCategory(nombre)
-    setCategorias(next)
-    if (demand === nombre) setDemand(null)
-    setCatABorrar(null)
+    if (!aBorrar) return
+    const { clase, nombre } = aBorrar
+    if (clase === 'categoria') {
+      setCategorias(await deleteCategory(nombre))
+      if (demand === nombre) setDemand(null)
+    } else {
+      setCustomTypes(await deleteVisitType(nombre))
+      if (visit === nombre) setVisit(null)
+    }
+    setABorrar(null)
   }
 
   async function agregarTipo() {
@@ -170,6 +185,8 @@ export default function Clientes() {
                 color={o.color}
                 selected={visit === o.value}
                 onSelect={() => setVisit(visit === o.value ? null : o.value)}
+                // Los 4 tipos fijos no se borran; los que cargó el negocio, sí.
+                onDelete={o.custom ? () => setABorrar({ clase: 'tipo', nombre: o.value }) : undefined}
               />
             ))}
           </div>
@@ -318,7 +335,7 @@ export default function Clientes() {
                     aria-label={`Borrar ${c}`}
                     onClick={(e) => {
                       e.stopPropagation()
-                      setCatABorrar(c)
+                      setABorrar({ clase: 'categoria', nombre: c })
                     }}
                     className={`absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-lg transition active:scale-90 ${
                       active
@@ -495,10 +512,14 @@ export default function Clientes() {
         </section>
       </div>
 
-      {catABorrar && (
+      {aBorrar && (
         <ConfirmDialog
-          mensaje={`¿Borrar "${catABorrar}" de la lista de productos?`}
-          onCancel={() => setCatABorrar(null)}
+          mensaje={
+            aBorrar.clase === 'categoria'
+              ? `¿Borrar "${aBorrar.nombre}" de la lista de productos?`
+              : `¿Borrar el tipo de cliente "${aBorrar.nombre}"? Las visitas ya registradas se conservan.`
+          }
+          onCancel={() => setABorrar(null)}
           onConfirm={confirmarBorrado}
         />
       )}
@@ -1094,27 +1115,52 @@ function VisitButton({
   color,
   selected,
   onSelect,
+  onDelete,
 }: {
   label: string
   color: string
   selected: boolean
   onSelect: () => void
+  /** Si viene, se muestra el tacho para borrar el tipo (solo los personalizados). */
+  onDelete?: () => void
 }) {
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onSelect}
-      style={selected ? { backgroundColor: color, borderColor: color } : { borderLeftColor: color }}
-      className={`flex min-h-[68px] w-full items-center gap-3 rounded-2xl border border-l-4 px-4 text-left text-lg font-semibold transition active:scale-[0.98] ${
-        selected
-          ? 'text-white shadow-sm'
-          : 'border-slate-200 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
-      }`}
-    >
-      <span className="flex-1">{label}</span>
-      {selected && <CheckIcon />}
-    </button>
+    <div className="relative">
+      <button
+        type="button"
+        aria-pressed={selected}
+        onClick={onSelect}
+        style={selected ? { backgroundColor: color, borderColor: color } : { borderLeftColor: color }}
+        className={`flex min-h-[68px] w-full items-center gap-3 rounded-2xl border border-l-4 py-4 pl-4 text-left text-lg font-semibold transition active:scale-[0.98] ${
+          onDelete ? 'pr-14' : 'pr-4'
+        } ${
+          selected
+            ? 'text-white shadow-sm'
+            : 'border-slate-200 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
+        }`}
+      >
+        <span className="flex-1">{label}</span>
+        {selected && <CheckIcon />}
+      </button>
+      {onDelete && (
+        // Hit-area propia sobre el botón: borra sin seleccionar el tipo.
+        <button
+          type="button"
+          aria-label={`Borrar ${label}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+          className={`absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg transition active:scale-90 ${
+            selected
+              ? 'text-white/80 hover:bg-white/20'
+              : 'text-slate-300 hover:bg-slate-100 hover:text-red-500 dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-red-400'
+          }`}
+        >
+          <TrashIcon />
+        </button>
+      )}
+    </div>
   )
 }
 

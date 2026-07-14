@@ -157,6 +157,21 @@ export async function addVisitType(raw: string): Promise<string[]> {
   return loadCustomVisitTypes()
 }
 
+/**
+ * Borra un tipo de visita personalizado y devuelve la lista actualizada.
+ * Los registros viejos guardan el nombre como texto, así que siguen contando en
+ * las estadísticas aunque el tipo ya no esté en el catálogo.
+ */
+export async function deleteVisitType(nombre: string): Promise<string[]> {
+  const { error } = await supabase.from('tipos_visita').delete().eq('nombre', nombre)
+
+  if (error) {
+    console.error('Error borrando tipo de visita:', error.message)
+    throw new Error(error.message)
+  }
+  return loadCustomVisitTypes()
+}
+
 /** Catálogo completo de categorías (orden alfabético, sin duplicados). */
 export async function loadAllCategories(): Promise<string[]> {
   const { data, error } = await supabase

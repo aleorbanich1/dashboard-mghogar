@@ -2,7 +2,8 @@ import { useMemo, useRef, useState } from 'react'
 import {
   parseUdiskLog,
   empleadosDe,
-  sugerirEsperada,
+  sugerirHorario,
+  horarioVacio,
   generarReporte,
   fmtFecha,
   fmtHoras,
@@ -10,6 +11,7 @@ import {
   nombrePropio,
   type Marca,
   type Reporte,
+  type HorarioEmpleado,
 } from '../lib/asistencia'
 import { exportarPDF, exportarDOCX } from '../lib/exportar'
 
@@ -37,7 +39,7 @@ export default function Asistencia() {
 
   // Config (las "preguntas" del wizard)
   const [incluidos, setIncluidos] = useState<Set<string>>(new Set())
-  const [esperadas, setEsperadas] = useState<Record<string, string>>({})
+  const [horarios, setHorarios] = useState<Record<string, HorarioEmpleado>>({})
   const [toleranciaRaw, setToleranciaRaw] = useState('10')
   const [diasLaborables, setDiasLaborables] = useState<Set<number>>(new Set([1, 2, 3, 4, 5, 6]))
 
@@ -66,9 +68,10 @@ export default function Asistencia() {
 
     const emps = empleadosDe(r.marcas)
     setIncluidos(new Set(emps.map((e) => e.enNo)))
-    const sug: Record<string, string> = {}
-    for (const e of emps) sug[e.enNo] = sugerirEsperada(r.marcas, e.enNo) ?? ''
-    setEsperadas(sug)
+    // El doble turno y los horarios salen detectados de las propias marcas.
+    const sug: Record<string, HorarioEmpleado> = {}
+    for (const e of emps) sug[e.enNo] = sugerirHorario(r.marcas, e.enNo)
+    setHorarios(sug)
     setPaso('config')
   }
 
@@ -79,6 +82,26 @@ export default function Asistencia() {
       else s.add(enNo)
       return s
     })
+  }
+
+  /** Actualiza el horario de un empleado sin pisar el resto. */
+  function editarHorario(enNo: string, patch: Partial<HorarioEmpleado>) {
+    setHorarios((prev) => ({
+      ...prev,
+      [enNo]: { ...(prev[enNo] ?? horarioVacio()), ...patch },
+    }))
+  }
+
+  function editarTurno(
+    enNo: string,
+    turno: 'turno1' | 'turno2',
+    campo: 'entrada' | 'salida',
+    valor: string
+  ) {
+    const actual = horarios[enNo] ?? horarioVacio()
+    editarHorario(enNo, {
+      [turno]: { ...actual[turno], [campo]: valor || null },
+    } as Partial<HorarioEmpleado>)
   }
 
   function toggleDia(id: number) {
@@ -92,11 +115,9 @@ export default function Asistencia() {
 
   function generar() {
     const tolerancia = Number(toleranciaRaw)
-    const esperadasFinal: Record<string, string | null> = {}
-    for (const [enNo, h] of Object.entries(esperadas)) esperadasFinal[enNo] = h || null
     const rep = generarReporte(marcas, {
       incluidos,
-      esperadas: esperadasFinal,
+      horarios,
       toleranciaMin: Number.isFinite(tolerancia) ? tolerancia : 10,
       diasLaborables,
       ventanaDupMin: VENTANA_DUP_MIN,
@@ -227,9 +248,10 @@ export default function Asistencia() {
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-              <h2 className="font-semibold">Tolerancia de llegada</h2>
+              <h2 className="font-semibold">Tolerancia</h2>
               <p className="mb-3 mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                Minutos de gracia después de la hora esperada antes de marcar tardanza.
+                Minutos de gracia sobre el horario esperado: se marca tardanza si entra más tarde,
+                y salida anticipada si se va más temprano.
               </p>
               <div className="flex items-center gap-2">
                 <input
@@ -246,34 +268,61 @@ export default function Asistencia() {
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-              <h2 className="font-semibold">Personas y hora esperada de entrada</h2>
+              <h2 className="font-semibold">Personas y horarios</h2>
               <p className="mb-3 mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                La hora sugerida sale de sus propias marcas (mediana redondeada). Ajustala si
-                corresponde, o dejala vacía para no controlar tardanzas a esa persona.
+                El doble turno y los horarios vienen detectados de las propias marcas de cada
+                persona. Ajustá lo que haga falta; un campo vacío = no se controla.
               </p>
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {empleados.map((e) => {
                   const activo = incluidos.has(e.enNo)
+                  const h = horarios[e.enNo] ?? horarioVacio()
                   return (
-                    <li key={e.enNo} className="flex items-center gap-3 py-2.5">
-                      <label className="flex flex-1 cursor-pointer items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={activo}
-                          onChange={() => toggleIncluido(e.enNo)}
-                          className="h-5 w-5 rounded accent-emerald-600"
+                    <li key={e.enNo} className="flex flex-col gap-2.5 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="flex cursor-pointer items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={activo}
+                            onChange={() => toggleIncluido(e.enNo)}
+                            className="h-5 w-5 rounded accent-emerald-600"
+                          />
+                          <span className={`text-sm font-semibold ${activo ? '' : 'text-slate-400 line-through dark:text-slate-600'}`}>
+                            {nombrePropio(e.nombre)}
+                          </span>
+                        </label>
+                        <label className={`flex cursor-pointer items-center gap-2 text-xs font-medium ${activo ? 'text-slate-600 dark:text-slate-300' : 'text-slate-300 dark:text-slate-600'}`}>
+                          <input
+                            type="checkbox"
+                            checked={h.dobleTurno}
+                            disabled={!activo}
+                            onChange={() => editarHorario(e.enNo, { dobleTurno: !h.dobleTurno })}
+                            className="h-4 w-4 rounded accent-emerald-600"
+                          />
+                          Doble turno
+                        </label>
+                      </div>
+
+                      <div className={`flex flex-col gap-1.5 pl-8 ${activo ? '' : 'opacity-40'}`}>
+                        <HorarioTurno
+                          etiqueta={h.dobleTurno ? 'Turno mañana' : 'Jornada'}
+                          entrada={h.turno1.entrada ?? ''}
+                          salida={h.turno1.salida ?? ''}
+                          disabled={!activo}
+                          onEntrada={(v) => editarTurno(e.enNo, 'turno1', 'entrada', v)}
+                          onSalida={(v) => editarTurno(e.enNo, 'turno1', 'salida', v)}
                         />
-                        <span className={`text-sm font-medium ${activo ? '' : 'text-slate-400 line-through dark:text-slate-600'}`}>
-                          {nombrePropio(e.nombre)}
-                        </span>
-                      </label>
-                      <input
-                        type="time"
-                        value={esperadas[e.enNo] ?? ''}
-                        disabled={!activo}
-                        onChange={(ev) => setEsperadas((prev) => ({ ...prev, [e.enNo]: ev.target.value }))}
-                        className="rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-950"
-                      />
+                        {h.dobleTurno && (
+                          <HorarioTurno
+                            etiqueta="Turno tarde"
+                            entrada={h.turno2.entrada ?? ''}
+                            salida={h.turno2.salida ?? ''}
+                            disabled={!activo}
+                            onEntrada={(v) => editarTurno(e.enNo, 'turno2', 'entrada', v)}
+                            onSalida={(v) => editarTurno(e.enNo, 'turno2', 'salida', v)}
+                          />
+                        )}
+                      </div>
                     </li>
                   )
                 })}
@@ -313,6 +362,10 @@ export default function Asistencia() {
                 {
                   label: 'Tardanzas',
                   valor: String(reporte.empleados.reduce((a, e) => a + e.tardanzas, 0)),
+                },
+                {
+                  label: 'Se fueron antes',
+                  valor: String(reporte.empleados.reduce((a, e) => a + e.salidasTempranas, 0)),
                 },
                 {
                   label: 'Ausencias',
@@ -379,7 +432,7 @@ export default function Asistencia() {
                   <h3 className="font-semibold">{nombrePropio(emp.nombre)}</h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     {emp.diasTrabajados} días · {fmtHoras(emp.totalMinutos)} · {emp.tardanzas} tardanzas ·{' '}
-                    {emp.ausencias.length} ausencias
+                    {emp.salidasTempranas} salidas antes · {emp.ausencias.length} ausencias
                   </p>
                 </header>
                 <div className="overflow-x-auto">
@@ -397,7 +450,14 @@ export default function Asistencia() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {emp.dias.map((d) => (
-                        <tr key={d.fecha} className={d.tardeMin !== null ? 'bg-amber-50 dark:bg-amber-950/30' : ''}>
+                        <tr
+                          key={d.fecha}
+                          className={
+                            d.tardeMin !== null || d.tempranoMin !== null
+                              ? 'bg-amber-50 dark:bg-amber-950/30'
+                              : ''
+                          }
+                        >
                           <td className="whitespace-nowrap px-4 py-1.5">
                             {fmtFecha(d.fecha).slice(0, 5)} <span className="text-slate-400">{nombreDia(d.fecha)}</span>
                           </td>
@@ -409,6 +469,7 @@ export default function Asistencia() {
                           <td className="px-4 py-1.5 text-amber-700 dark:text-amber-400">
                             {[
                               d.tardeMin !== null ? `Tarde +${d.tardeMin} min` : null,
+                              d.tempranoMin !== null ? `Se fue ${d.tempranoMin} min antes` : null,
                               d.incompleto ? 'Falta una marca' : null,
                             ]
                               .filter(Boolean)
@@ -447,5 +508,47 @@ export default function Asistencia() {
         )}
       </div>
     </main>
+  )
+}
+
+/** Par entrada/salida esperadas de un turno. */
+function HorarioTurno({
+  etiqueta,
+  entrada,
+  salida,
+  disabled,
+  onEntrada,
+  onSalida,
+}: {
+  etiqueta: string
+  entrada: string
+  salida: string
+  disabled: boolean
+  onEntrada: (v: string) => void
+  onSalida: (v: string) => void
+}) {
+  const clase =
+    'rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs tabular-nums focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-950 dark:[color-scheme:dark]'
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="w-24 shrink-0 text-xs text-slate-500 dark:text-slate-400">{etiqueta}</span>
+      <input
+        type="time"
+        aria-label={`${etiqueta}: entrada`}
+        value={entrada}
+        disabled={disabled}
+        onChange={(e) => onEntrada(e.target.value)}
+        className={clase}
+      />
+      <span className="text-xs text-slate-400">a</span>
+      <input
+        type="time"
+        aria-label={`${etiqueta}: salida`}
+        value={salida}
+        disabled={disabled}
+        onChange={(e) => onSalida(e.target.value)}
+        className={clase}
+      />
+    </div>
   )
 }

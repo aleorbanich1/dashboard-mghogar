@@ -40,6 +40,10 @@ export interface Turno {
   salida: string | null
   /** duración en minutos (0 si el turno está incompleto) */
   minutos: number
+  /** minutos de atraso en la entrada de ESTE turno (+tolerancia), o null */
+  tardeMin: number | null
+  /** minutos que se fue antes de la salida esperada de ESTE turno, o null */
+  tempranoMin: number | null
 }
 
 export interface DiaReporte {
@@ -47,8 +51,10 @@ export interface DiaReporte {
   turnos: Turno[]
   /** minutos trabajados del día (solo turnos completos) */
   minutos: number
-  /** minutos de atraso respecto de la hora esperada (+tolerancia), o null */
+  /** atraso total del día sumando los turnos, o null si llegó en hora */
   tardeMin: number | null
+  /** minutos que se fue antes (sumando turnos), o null */
+  tempranoMin: number | null
   /** true si la cantidad de marcas fue impar (falta una marca) */
   incompleto: boolean
 }
@@ -60,8 +66,34 @@ export interface EmpleadoReporte {
   totalMinutos: number
   diasTrabajados: number
   tardanzas: number
+  /** días en que se fue antes de la salida esperada */
+  salidasTempranas: number
   /** fechas 'YYYY-MM-DD' de días laborables con actividad ajena y sin marcas */
   ausencias: string[]
+}
+
+/** Horario esperado de un turno. null = sin control para ese extremo. */
+export interface TurnoEsperado {
+  entrada: string | null
+  salida: string | null
+}
+
+/**
+ * Horario esperado de un empleado. Con `dobleTurno` en true se controlan los
+ * dos turnos (mañana y tarde); en false, solo el primero (jornada única).
+ */
+export interface HorarioEmpleado {
+  dobleTurno: boolean
+  turno1: TurnoEsperado
+  turno2: TurnoEsperado
+}
+
+export function horarioVacio(): HorarioEmpleado {
+  return {
+    dobleTurno: false,
+    turno1: { entrada: null, salida: null },
+    turno2: { entrada: null, salida: null },
+  }
 }
 
 export interface DuplicadoDescartado {
@@ -81,8 +113,8 @@ export interface Reporte {
 export interface ConfigReporte {
   /** enNo de los empleados a incluir */
   incluidos: Set<string>
-  /** hora esperada de entrada por empleado ('HH:MM') o null = sin control */
-  esperadas: Record<string, string | null>
+  /** horario esperado por empleado (entrada/salida de cada turno) */
+  horarios: Record<string, HorarioEmpleado>
   toleranciaMin: number
   /** días laborables: 0 = domingo … 6 = sábado (getDay de JS) */
   diasLaborables: Set<number>
@@ -177,24 +209,58 @@ export function empleadosDe(marcas: Marca[]): { enNo: string; nombre: string }[]
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
 }
 
-/**
- * Sugiere la hora esperada de entrada de un empleado: la mediana de sus
- * primeras marcas del día, redondeada al cuarto de hora más cercano. Así el
- * control de tardanzas se adapta a cada horario real (ej. quien entra 12:40
- * no queda "tarde" contra las 09:00).
- */
-export function sugerirEsperada(marcas: Marca[], enNo: string): string | null {
-  const primeras = new Map<string, number>()
+/** Mediana redondeada al cuarto de hora, o null si no hay datos. */
+function medianaHora(valores: number[]): string | null {
+  if (valores.length === 0) return null
+  const orden = [...valores].sort((a, b) => a - b)
+  const mediana = orden[Math.floor((orden.length - 1) / 2)]
+  return minutosAHora(Math.round(mediana / 15) * 15)
+}
+
+/** Agrupa las marcas de un empleado por día (ya ordenadas por hora). */
+function diasDe(marcas: Marca[], enNo: string): number[][] {
+  const dias = new Map<string, number[]>()
   for (const m of marcas) {
     if (m.enNo !== enNo) continue
-    const actual = primeras.get(m.fecha)
-    if (actual === undefined || m.min < actual) primeras.set(m.fecha, m.min)
+    const d = dias.get(m.fecha)
+    if (d) d.push(m.min)
+    else dias.set(m.fecha, [m.min])
   }
-  const valores = [...primeras.values()].sort((a, b) => a - b)
-  if (valores.length === 0) return null
-  const mediana = valores[Math.floor((valores.length - 1) / 2)]
-  const redondeada = Math.round(mediana / 15) * 15
-  return minutosAHora(redondeada)
+  return [...dias.values()]
+}
+
+/**
+ * Detecta el horario habitual de un empleado a partir de sus propias marcas.
+ *
+ * - Doble turno: si la mayoría de sus días tiene 4 marcas o más (entra, sale al
+ *   mediodía, vuelve y sale a la noche).
+ * - Cada extremo (entrada/salida de cada turno) sale de la mediana de esa marca
+ *   en todos sus días, redondeada al cuarto de hora. Así el control se adapta a
+ *   cada horario real: quien entra 12:40 no queda "tarde" contra las 09:00.
+ */
+export function sugerirHorario(marcas: Marca[], enNo: string): HorarioEmpleado {
+  const dias = diasDe(marcas, enNo)
+  if (dias.length === 0) return horarioVacio()
+
+  const conDoble = dias.filter((d) => d.length >= 4).length
+  const dobleTurno = conDoble > dias.length / 2
+
+  const enIndice = (i: number) => medianaHora(dias.filter((d) => d.length > i).map((d) => d[i]))
+
+  // Sin doble turno, la salida es la ÚLTIMA marca del día (no la segunda).
+  const salidaUnica = medianaHora(dias.filter((d) => d.length >= 2).map((d) => d[d.length - 1]))
+
+  return {
+    dobleTurno,
+    turno1: {
+      entrada: enIndice(0),
+      salida: dobleTurno ? enIndice(1) : salidaUnica,
+    },
+    turno2: {
+      entrada: dobleTurno ? enIndice(2) : null,
+      salida: dobleTurno ? enIndice(3) : null,
+    },
+  }
 }
 
 /** Colapsa marcas de la misma persona a menos de `ventanaMin` de la anterior. */
@@ -223,16 +289,44 @@ export function colapsarDuplicados(
   return { marcas: limpias, duplicados }
 }
 
-/** Empareja las marcas de un día de a 2: [entrada, salida, entrada, salida…]. */
-export function emparejarDia(minutos: number[]): Turno[] {
+/**
+ * Empareja las marcas de un día de a 2: [entrada, salida, entrada, salida…] y
+ * compara cada turno con su horario esperado (si hay uno cargado).
+ *
+ * El turno N se compara contra turno1 si N = 0 y contra turno2 si N = 1. Los
+ * turnos extra (3º en adelante) no se controlan: se listan tal cual.
+ */
+export function emparejarDia(
+  minutos: number[],
+  horario: HorarioEmpleado = horarioVacio(),
+  toleranciaMin = 0
+): Turno[] {
+  const esperados = [horario.turno1, horario.dobleTurno ? horario.turno2 : null]
+
   const turnos: Turno[] = []
   for (let i = 0; i < minutos.length; i += 2) {
     const entrada = minutos[i]
     const salida = i + 1 < minutos.length ? minutos[i + 1] : null
+    const esperado = esperados[turnos.length] ?? null
+
+    let tardeMin: number | null = null
+    if (esperado?.entrada) {
+      const ref = horaAMinutos(esperado.entrada)
+      if (entrada > ref + toleranciaMin) tardeMin = entrada - ref
+    }
+
+    let tempranoMin: number | null = null
+    if (esperado?.salida && salida !== null) {
+      const ref = horaAMinutos(esperado.salida)
+      if (salida < ref - toleranciaMin) tempranoMin = ref - salida
+    }
+
     turnos.push({
       entrada: minutosAHora(entrada),
       salida: salida === null ? null : minutosAHora(salida),
       minutos: salida === null ? 0 : salida - entrada,
+      tardeMin,
+      tempranoMin,
     })
   }
   return turnos
@@ -285,22 +379,21 @@ export function generarReporte(todas: Marca[], config: ConfigReporte): Reporte {
 
   const empleados: EmpleadoReporte[] = []
   for (const [enNo, emp] of porEmpleado) {
-    const esperada = config.esperadas[enNo] ?? null
-    const esperadaMin = esperada === null ? null : horaAMinutos(esperada)
+    const horario = config.horarios[enNo] ?? horarioVacio()
 
     const dias: DiaReporte[] = []
     for (const [fecha, mins] of [...emp.dias.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-      const turnos = emparejarDia(mins)
-      const minutos = turnos.reduce((acc, t) => acc + t.minutos, 0)
-      const tardeMin =
-        esperadaMin !== null && mins[0] > esperadaMin + config.toleranciaMin
-          ? mins[0] - esperadaMin
-          : null
+      const turnos = emparejarDia(mins, horario, config.toleranciaMin)
+      const sumar = (f: (t: Turno) => number | null): number | null => {
+        const total = turnos.reduce((acc, t) => acc + (f(t) ?? 0), 0)
+        return total > 0 ? total : null
+      }
       dias.push({
         fecha,
         turnos,
-        minutos,
-        tardeMin,
+        minutos: turnos.reduce((acc, t) => acc + t.minutos, 0),
+        tardeMin: sumar((t) => t.tardeMin),
+        tempranoMin: sumar((t) => t.tempranoMin),
         incompleto: mins.length % 2 !== 0,
       })
     }
@@ -313,6 +406,7 @@ export function generarReporte(todas: Marca[], config: ConfigReporte): Reporte {
       totalMinutos: dias.reduce((acc, d) => acc + d.minutos, 0),
       diasTrabajados: dias.length,
       tardanzas: dias.filter((d) => d.tardeMin !== null).length,
+      salidasTempranas: dias.filter((d) => d.tempranoMin !== null).length,
       ausencias: laborables.filter((f) => !fechasTrabajadas.has(f)),
     })
   }

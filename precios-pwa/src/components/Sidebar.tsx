@@ -2,9 +2,9 @@ import { useState } from 'react'
 import ThemeToggle from './ThemeToggle'
 import { signOut } from '../lib/auth'
 
-export type Tab = 'precios' | 'clientes' | 'registro'
+export type Tab = 'precios' | 'clientes' | 'registro' | 'calendarios'
 
-// El día de la fusión se agrega acá la cuarta opción: Tareas.
+// El día de la fusión se agrega acá la opción de Tareas.
 const ITEMS: { id: Tab; label: string; icono: React.ReactNode }[] = [
   {
     id: 'precios',
@@ -33,6 +33,16 @@ const ITEMS: { id: Tab; label: string; icono: React.ReactNode }[] = [
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden="true">
         <circle cx="12" cy="12" r="8.5" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5V12l3 2" />
+      </svg>
+    ),
+  },
+  {
+    id: 'calendarios',
+    label: 'Registro de calendarios',
+    icono: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden="true">
+        <rect x="3.5" y="5" width="17" height="16" rx="2" />
+        <path strokeLinecap="round" d="M3.5 10h17M8 3v4M16 3v4" />
       </svg>
     ),
   },
