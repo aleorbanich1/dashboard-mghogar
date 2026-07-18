@@ -11,9 +11,9 @@ import { supabase } from './supabase'
 export interface Registro {
   id: string
   ts: number // epoch ms (derivado de created_at)
-  // Id fijo (ver VISIT_TYPES) o el nombre de un tipo personalizado (tipos_visita).
-  visit: string
-  demand: string | null // nombre de categoría pedida sin stock, o null
+  // Uno o varios: id fijo (ver VISIT_TYPES) o nombre de tipo personalizado.
+  visits: string[]
+  demandas: string[] // categorías pedidas (puede estar vacío)
   userId: string | null // empleado que atendió (registros.user_id), o null
   ventaAdicional: boolean // se llevó algo más (solo si compró)
   esHabitual: boolean | null // true = habitual, false = nuevo, null = sin especificar
@@ -27,8 +27,12 @@ export interface Registro {
 interface RegistroRow {
   id: string
   created_at: string
-  visit: string
+  // Columnas viejas (una sola opción): se conservan por compatibilidad.
+  visit: string | null
   demand: string | null
+  // Columnas nuevas (multiselección).
+  visits: string[] | null
+  demandas: string[] | null
   user_id: string | null
   venta_adicional: boolean
   es_habitual: boolean | null
@@ -42,8 +46,9 @@ function mapRow(row: RegistroRow): Registro {
   return {
     id: row.id,
     ts: new Date(row.created_at).getTime(),
-    visit: row.visit,
-    demand: row.demand,
+    // Filas migradas traen los arrays; las viejas, el valor único → lo envolvemos.
+    visits: row.visits?.length ? row.visits : row.visit ? [row.visit] : [],
+    demandas: row.demandas?.length ? row.demandas : row.demand ? [row.demand] : [],
     userId: row.user_id,
     ventaAdicional: row.venta_adicional ?? false,
     esHabitual: row.es_habitual ?? null,
@@ -59,7 +64,7 @@ export async function loadRegistros(): Promise<Registro[]> {
   const { data, error } = await supabase
     .from('registros')
     .select(
-      'id, created_at, visit, demand, user_id, venta_adicional, es_habitual, factura, recomendacion, redes, volvio',
+      'id, created_at, visit, demand, visits, demandas, user_id, venta_adicional, es_habitual, factura, recomendacion, redes, volvio',
     )
     .order('created_at', { ascending: true })
 
@@ -72,8 +77,8 @@ export async function loadRegistros(): Promise<Registro[]> {
 
 /** Inserta un registro y devuelve la lista completa actualizada. */
 export async function addRegistro(input: {
-  visit: string
-  demand: string | null
+  visits: string[]
+  demandas: string[]
   userId: string | null
   ventaAdicional: boolean
   esHabitual: boolean | null
@@ -83,8 +88,12 @@ export async function addRegistro(input: {
   volvio: boolean
 }): Promise<Registro[]> {
   const { error } = await supabase.from('registros').insert({
-    visit: input.visit,
-    demand: input.demand,
+    // Columnas viejas: primer valor, para no romper el NOT NULL de `visit`.
+    visit: input.visits[0] ?? null,
+    demand: input.demandas[0] ?? null,
+    // Columnas nuevas: la selección completa.
+    visits: input.visits,
+    demandas: input.demandas,
     user_id: input.userId,
     venta_adicional: input.ventaAdicional,
     es_habitual: input.esHabitual,
@@ -170,6 +179,34 @@ export async function deleteVisitType(nombre: string): Promise<string[]> {
     throw new Error(error.message)
   }
   return loadCustomVisitTypes()
+}
+
+/* ---------- Tipos de visita FIJOS ocultados ---------- */
+// Los 4 tipos fijos (VISIT_TYPES) viven en código, no en la base. Para poder
+// "borrarlos" guardamos su id en `tipos_visita_ocultos` y la UI los esconde.
+// Las visitas ya registradas con ese tipo se conservan (siguen contando).
+
+/** ids de los tipos fijos que el negocio decidió ocultar. */
+export async function loadHiddenDefaults(): Promise<string[]> {
+  const { data, error } = await supabase.from('tipos_visita_ocultos').select('visit_id')
+
+  if (error) {
+    console.error('Error cargando tipos ocultos:', error.message)
+    return []
+  }
+  return (data as { visit_id: string }[]).map((r) => r.visit_id)
+}
+
+/** Oculta un tipo fijo y devuelve la lista actualizada de ocultos. */
+export async function hideDefaultVisitType(id: string): Promise<string[]> {
+  const { error } = await supabase.from('tipos_visita_ocultos').insert({ visit_id: id })
+
+  // 23505 = unique_violation: ya estaba oculto, no es un error real.
+  if (error && error.code !== '23505') {
+    console.error('Error ocultando tipo fijo:', error.message)
+    throw new Error(error.message)
+  }
+  return loadHiddenDefaults()
 }
 
 /** Catálogo completo de categorías (orden alfabético, sin duplicados). */

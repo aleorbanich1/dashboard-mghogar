@@ -50,3 +50,40 @@ create policy tipos_visita_delete on public.tipos_visita
   using (true);
 
 grant delete on public.tipos_visita to anon, authenticated;
+
+-- ── 3. Multiselección en Clientes ───────────────────────────────────────────
+-- "¿Qué hizo la persona?" y "¿Qué pidió?" ahora aceptan VARIAS opciones. Se
+-- agregan columnas array y se migran los valores viejos (una sola opción).
+-- Las columnas viejas `visit`/`demand` quedan (se siguen llenando con el 1º
+-- valor) para no romper nada anterior.
+
+alter table public.registros add column if not exists visits   text[] not null default '{}';
+alter table public.registros add column if not exists demandas text[] not null default '{}';
+
+-- Migrar lo ya cargado: el valor único pasa a ser el primer (y único) elemento.
+update public.registros
+  set visits = array[visit]
+  where visit is not null and visits = '{}';
+
+update public.registros
+  set demandas = array[demand]
+  where demand is not null and demandas = '{}';
+
+-- ── 4. Ocultar tipos de cliente FIJOS ───────────────────────────────────────
+-- Los 4 tipos fijos viven en el código de la app. Para poder "borrarlos" se
+-- guarda su id acá y la app los esconde (las visitas viejas se conservan).
+
+create table if not exists public.tipos_visita_ocultos (
+  visit_id text primary key
+);
+
+alter table public.tipos_visita_ocultos enable row level security;
+
+drop policy if exists tipos_visita_ocultos_todo on public.tipos_visita_ocultos;
+create policy tipos_visita_ocultos_todo on public.tipos_visita_ocultos
+  for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+grant select, insert, delete on public.tipos_visita_ocultos to anon, authenticated;

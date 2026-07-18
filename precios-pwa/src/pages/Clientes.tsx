@@ -10,6 +10,8 @@ import {
   loadCustomVisitTypes,
   addVisitType,
   deleteVisitType,
+  loadHiddenDefaults,
+  hideDefaultVisitType,
   type Registro,
   type Empleado,
 } from '../lib/registros'
@@ -41,17 +43,21 @@ interface VisitOption {
 }
 
 /** Qué está pendiente de confirmar borrado (modal in-app). */
-type Borrable = { clase: 'categoria' | 'tipo'; nombre: string }
+type Borrable =
+  | { clase: 'categoria'; nombre: string }
+  | { clase: 'tipo'; nombre: string } // tipo de cliente personalizado
+  | { clase: 'default'; id: string; nombre: string } // tipo de cliente fijo (se oculta)
 
 export default function Clientes() {
   const [registros, setRegistros] = useState<Registro[]>([])
   const [categorias, setCategorias] = useState<string[]>([])
   const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [customTypes, setCustomTypes] = useState<string[]>([])
+  const [hiddenDefaults, setHiddenDefaults] = useState<string[]>([])
 
-  // Selección en curso del empleado.
-  const [visit, setVisit] = useState<string | null>(null)
-  const [demand, setDemand] = useState<string | null>(null)
+  // Selección en curso del empleado (multiselección).
+  const [visits, setVisits] = useState<Set<string>>(new Set())
+  const [demands, setDemands] = useState<Set<string>>(new Set())
   // Empleado que atendió; lo elige el admin en cada registro (arranca sin asignar).
   const [empleadoId, setEmpleadoId] = useState<string | null>(null)
   const [ventaAdicional, setVentaAdicional] = useState(false)
@@ -75,11 +81,13 @@ export default function Clientes() {
     loadAllCategories().then(setCategorias)
     loadEmpleados().then(setEmpleados)
     loadCustomVisitTypes().then(setCustomTypes)
+    loadHiddenDefaults().then(setHiddenDefaults)
   }, [])
 
   const visitOptions: VisitOption[] = useMemo(
     () => [
-      ...VISIT_TYPES.map((v) => ({
+      // Fijos: se esconden los que el negocio ocultó.
+      ...VISIT_TYPES.filter((v) => !hiddenDefaults.includes(v.id)).map((v) => ({
         value: v.id,
         label: v.label,
         color: TONE_COLOR[v.tone],
@@ -91,14 +99,30 @@ export default function Clientes() {
         custom: true,
       })),
     ],
-    [customTypes]
+    [customTypes, hiddenDefaults]
   )
 
+  function toggleVisit(v: string) {
+    setVisits((prev) => {
+      const s = new Set(prev)
+      s.has(v) ? s.delete(v) : s.add(v)
+      return s
+    })
+  }
+
+  function toggleDemand(c: string) {
+    setDemands((prev) => {
+      const s = new Set(prev)
+      s.has(c) ? s.delete(c) : s.add(c)
+      return s
+    })
+  }
+
   async function registrar() {
-    if (!visit) return
+    if (visits.size === 0) return
     const next = await addRegistro({
-      visit,
-      demand,
+      visits: [...visits],
+      demandas: [...demands],
       userId: empleadoId,
       ventaAdicional,
       esHabitual,
@@ -108,8 +132,8 @@ export default function Clientes() {
       volvio,
     })
     setRegistros(next)
-    setVisit(null)
-    setDemand(null)
+    setVisits(new Set())
+    setDemands(new Set())
     setVentaAdicional(false)
     setEsHabitual(null)
     setFactura(null)
@@ -127,20 +151,39 @@ export default function Clientes() {
     setCategorias(next)
     setNuevaCat('')
     // Deja seleccionada la recién creada para registrarla al toque.
-    setDemand(next.find((c) => c.toLowerCase() === name.toLowerCase()) ?? null)
+    const creada = next.find((c) => c.toLowerCase() === name.toLowerCase())
+    if (creada) setDemands((prev) => new Set(prev).add(creada))
   }
 
   async function confirmarBorrado() {
     if (!aBorrar) return
-    const { clase, nombre } = aBorrar
-    if (clase === 'categoria') {
-      setCategorias(await deleteCategory(nombre))
-      if (demand === nombre) setDemand(null)
+    if (aBorrar.clase === 'categoria') {
+      setCategorias(await deleteCategory(aBorrar.nombre))
+      quitarDemand(aBorrar.nombre)
+    } else if (aBorrar.clase === 'tipo') {
+      setCustomTypes(await deleteVisitType(aBorrar.nombre))
+      quitarVisit(aBorrar.nombre)
     } else {
-      setCustomTypes(await deleteVisitType(nombre))
-      if (visit === nombre) setVisit(null)
+      setHiddenDefaults(await hideDefaultVisitType(aBorrar.id))
+      quitarVisit(aBorrar.id)
     }
     setABorrar(null)
+  }
+
+  function quitarVisit(v: string) {
+    setVisits((prev) => {
+      const s = new Set(prev)
+      s.delete(v)
+      return s
+    })
+  }
+
+  function quitarDemand(c: string) {
+    setDemands((prev) => {
+      const s = new Set(prev)
+      s.delete(c)
+      return s
+    })
   }
 
   async function agregarTipo() {
@@ -150,7 +193,8 @@ export default function Clientes() {
     setCustomTypes(next)
     setNuevoTipo('')
     // Deja seleccionado el nuevo tipo para registrarlo al toque.
-    setVisit(next.find((t) => t.toLowerCase() === name.toLowerCase()) ?? name)
+    const creado = next.find((t) => t.toLowerCase() === name.toLowerCase()) ?? name
+    setVisits((prev) => new Set(prev).add(creado))
   }
 
   const filtrados = useMemo(() => {
@@ -176,17 +220,27 @@ export default function Clientes() {
 
         {/* PASO 1 — Qué hizo la persona */}
         <section className="flex flex-col gap-3">
-          <SectionTitle paso="1" title="¿Qué hizo la persona?" />
+          <SectionTitle
+            paso="1"
+            title="¿Qué hizo la persona?"
+            hint="Podés marcar más de una opción."
+          />
           <div className="flex flex-col gap-3">
             {visitOptions.map((o) => (
               <VisitButton
                 key={o.value}
                 label={o.label}
                 color={o.color}
-                selected={visit === o.value}
-                onSelect={() => setVisit(visit === o.value ? null : o.value)}
-                // Los 4 tipos fijos no se borran; los que cargó el negocio, sí.
-                onDelete={o.custom ? () => setABorrar({ clase: 'tipo', nombre: o.value }) : undefined}
+                selected={visits.has(o.value)}
+                onSelect={() => toggleVisit(o.value)}
+                // Los personalizados se borran; los fijos se ocultan.
+                onDelete={() =>
+                  setABorrar(
+                    o.custom
+                      ? { clase: 'tipo', nombre: o.value }
+                      : { clase: 'default', id: o.value, nombre: o.label }
+                  )
+                }
               />
             ))}
           </div>
@@ -309,17 +363,17 @@ export default function Clientes() {
           <SectionTitle
             paso="3"
             title="¿Qué pidió?"
-            hint="Opcional. Elegí la categoría del producto que pidió."
+            hint="Opcional. Podés elegir más de una categoría."
           />
           <div className="grid grid-cols-2 gap-3">
             {categorias.map((c) => {
-              const active = demand === c
+              const active = demands.has(c)
               return (
                 <div key={c} className="relative">
                   <button
                     type="button"
                     aria-pressed={active}
-                    onClick={() => setDemand(active ? null : c)}
+                    onClick={() => toggleDemand(c)}
                     className={`flex min-h-[60px] w-full items-center justify-center rounded-2xl border px-3 pt-3 pb-1 text-center text-base font-semibold transition active:scale-[0.98] ${
                       active
                         ? 'border-sky-600 bg-sky-600 text-white dark:border-sky-500 dark:bg-sky-500 dark:text-slate-950'
@@ -393,7 +447,7 @@ export default function Clientes() {
           <button
             type="button"
             onClick={registrar}
-            disabled={!visit}
+            disabled={visits.size === 0}
             className="min-h-[56px] w-full rounded-2xl bg-emerald-600 text-base font-bold text-white transition active:scale-[0.98] disabled:opacity-40 dark:bg-emerald-500 dark:text-slate-950"
           >
             Registrar visita
@@ -444,7 +498,7 @@ export default function Clientes() {
           >
             <BarChart
               data={dataPorEmpleado(
-                filtrados.filter((r) => r.visit === 'pregunto_compro'),
+                filtrados.filter((r) => r.visits.includes('pregunto_compro')),
                 empleados
               )}
               unit="vent."
@@ -581,7 +635,7 @@ function ConfirmDialog({
 function dataVisitas(registros: Registro[], opciones: VisitOption[]): BarDatum[] {
   return opciones.map((o) => ({
     label: o.label,
-    value: registros.filter((r) => r.visit === o.value).length,
+    value: registros.filter((r) => r.visits.includes(o.value)).length,
     color: o.color,
   }))
 }
@@ -589,8 +643,7 @@ function dataVisitas(registros: Registro[], opciones: VisitOption[]): BarDatum[]
 function dataDemanda(registros: Registro[]): BarDatum[] {
   const cuenta = new Map<string, number>()
   for (const r of registros) {
-    if (!r.demand) continue
-    cuenta.set(r.demand, (cuenta.get(r.demand) ?? 0) + 1)
+    for (const d of r.demandas) cuenta.set(d, (cuenta.get(d) ?? 0) + 1)
   }
   return [...cuenta.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -696,12 +749,12 @@ function DateField({
 
 function Resumen({ registros }: { registros: Registro[] }) {
   const total = registros.length
-  const compraron = registros.filter((r) => r.visit === 'pregunto_compro').length
+  const compraron = registros.filter((r) => r.visits.includes('pregunto_compro')).length
   const conversion = total > 0 ? Math.round((compraron / total) * 100) : 0
   const adicionales = registros.filter((r) => r.ventaAdicional).length
   // Venta adicional sobre la gente que compró.
   const adicEnCompra = registros.filter(
-    (r) => r.visit === 'pregunto_compro' && r.ventaAdicional
+    (r) => r.visits.includes('pregunto_compro') && r.ventaAdicional
   ).length
   const pctAdic = compraron > 0 ? Math.round((adicEnCompra / compraron) * 100) : 0
 
